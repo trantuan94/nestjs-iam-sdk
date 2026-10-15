@@ -9,6 +9,13 @@ export {
 
 export { Authorize } from './guard/authorize.decorator';
 export { SkipAuthorize } from './guard/skip-authorize.decorator';
+export {
+  AccessControl,
+  ACCESS_CONTROL_METADATA,
+  accessControlOf,
+  type AccessControlPolicy,
+} from './swagger/access-control.decorator';
+export { applyAccessControlToSwagger } from './swagger/apply-access-control';
 export { IamAuthzGuard } from './guard/iam-authz.guard';
 export {
   fromParam,

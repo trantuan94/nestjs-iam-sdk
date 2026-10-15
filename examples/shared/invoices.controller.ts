@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import {
+  AccessControl,
   Authorize,
   AuthorizedUser,
   Authz,
@@ -22,6 +23,7 @@ const INVOICES: Record<string, { namespaceId: string; createdBy: string; amount:
 @Controller('invoices')
 export class InvoicesController {
   @Get(':id')
+  @AccessControl({ namespace: '*', permissions: 'invoices:read' })
   @Authorize('invoices:read', { type: 'invoices', id: fromParam('id'), namespaceId: fromHeader('x-tenant') })
   findOne(@Param('id') id: string, @AuthorizedUser() userId: string) {
     return { id, readBy: userId };
@@ -59,6 +61,13 @@ export class InvoicesController {
   @Get()
   undeclared() {
     return { listed: true };
+  }
+
+  /** Documented, NOT enforced: `@AccessControl` attaches no guard. */
+  @Get('documented/only')
+  @AccessControl({ namespace: 'acme', permissions: ['invoices:read', 'invoices:export'] })
+  documentedOnly() {
+    return { documented: true };
   }
 }
 

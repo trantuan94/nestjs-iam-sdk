@@ -272,6 +272,31 @@ describe.each(ADAPTERS)('on %s', (_name, adapter) => {
     });
   });
 
+  describe('@AccessControl documents, and enforces nothing', () => {
+    it('leaves a route it alone decorates open, without asking IAM, when not global', async () => {
+      await app.close();
+      await boot({ global: false });
+
+      const res = await call('/invoices/documented/only', { token: null });
+
+      expect(res.status).toBe(200);
+      expect(iam.calls).toHaveLength(0);
+    });
+
+    it('does not count as a declaration under global mode', async () => {
+      const res = await call('/invoices/documented/only');
+
+      expect(res.status).toBe(403);
+      expect(iam.calls).toHaveLength(0);
+    });
+
+    it('adds no IAM call beside @Authorize', async () => {
+      await call('/invoices/inv-1');
+
+      expect(iam.calls).toHaveLength(1);
+    });
+  });
+
   describe('decision cache', () => {
     it('is off by default: every request asks IAM', async () => {
       await call('/invoices/inv-1');
