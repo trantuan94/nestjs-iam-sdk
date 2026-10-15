@@ -20,6 +20,7 @@ export default {
     'src/checker/failure.ts',
     'src/guard/resolvers.ts',
     'src/decision/**/*.ts',
+    'src/swagger/**/*.ts',
     '!src/**/*.spec.ts',
   ],
   concurrency: 4,

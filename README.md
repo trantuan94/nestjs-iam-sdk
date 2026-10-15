@@ -176,6 +176,42 @@ export class HealthController {}
 At boot the module logs every exempt route with its reason, and warns about every route that
 declares nothing. Only HTTP is guarded; RPC and WebSocket contexts pass through.
 
+## Documenting access — `@AccessControl`
+
+The same decorator nestjs-iam-service uses: it writes a route's **endpoint policy** into its
+Swagger description, as "***Endpoint policy***" followed by one `Namespace <ns>: <permissions>`
+line per policy.
+
+```ts
+import { AccessControl, applyAccessControlToSwagger } from '@trantuan94/nestjs-iam-sdk';
+
+@Get(':id')
+@AccessControl({ namespace: '*', permissions: 'invoices:read' })        // documents
+@Authorize('invoices:read', { type: 'invoices', id: fromParam('id') })  // enforces
+findOne() {}
+
+@AccessControl([
+  { namespace: 'acme', permissions: ['invoices:read', 'invoices:approve'] },
+  { namespace: 'master', permissions: 'invoices:read' },
+])
+```
+
+```ts
+// main.ts: before SwaggerModule.createDocument, which reads what this writes
+applyAccessControlToSwagger(app);
+const document = SwaggerModule.createDocument(app, config);
+```
+
+**It enforces nothing.** It attaches no guard and never calls IAM:
+
+- a route carrying only `@AccessControl` is open, unless you use `global: true`;
+- under `global: true` it is still undeclared, and refused with 403.
+
+Enforce with `@Authorize` or `@Authz()`.
+
+`applyAccessControlToSwagger` is idempotent, and harmless in an app without `@nestjs/swagger`.
+It does not need `IamAuthzModule` to be imported.
+
 ## What the client sees
 
 | Situation | Default answer |
