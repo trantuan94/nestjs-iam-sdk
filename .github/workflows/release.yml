@@ -2,13 +2,19 @@ name: release
 
 # Publishes when a version tag is pushed: `npm run version-packages`, commit,
 # then `git tag v$(node -p "require('./package.json').version") && git push --tags`.
+#
+# Authenticates by npm TRUSTED PUBLISHING (OIDC): there is no token. npmjs.com →
+# the package's Settings → Trusted Publisher names this repository and this
+# workflow file (`release.yml`); npm then accepts a publish only from a run of
+# exactly that. Nothing to leak, nothing to rotate, and 2FA is not asked for.
+# Renaming this file breaks publishing until the trusted publisher is updated.
 on:
   push:
     tags: ['v*']
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # the OIDC token npm exchanges for a publish, and provenance
 
 jobs:
   publish:
@@ -17,13 +23,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
+      # Trusted publishing needs a recent npm CLI; do not rely on the one the
+      # Node release bundles.
+      - run: npm install -g npm@latest
+      - run: npm --version
       - run: npm ci
       - name: The tag matches package.json
         run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
-      # prepublishOnly runs lint, typecheck, tests and the build.
+      # prepublishOnly runs lint, typecheck, tests and the build. Provenance is
+      # generated from the same OIDC identity.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
