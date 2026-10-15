@@ -1,6 +1,6 @@
 {
   "name": "@trantuan94/nestjs-iam-sdk",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "NestJS decorators, guard and client for nestjs-iam-service's POST /auth/authorize — fail-closed authorization for resource services.",
   "keywords": [
     "nestjs",
