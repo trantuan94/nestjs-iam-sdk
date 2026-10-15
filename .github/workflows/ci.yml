@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: The published tarball resolves both entry points
+        run: |
+          npm pack --silent
+          mkdir -p /tmp/consumer && cd /tmp/consumer && npm init -y >/dev/null
+          npm i --silent "$GITHUB_WORKSPACE"/trantuan94-nestjs-iam-sdk-*.tgz @nestjs/common @nestjs/core reflect-metadata rxjs
+          node -e "require('@trantuan94/nestjs-iam-sdk'); require('@trantuan94/nestjs-iam-sdk/testing'); console.log('ok')"
+
+  # The code that decides allow / deny, mutated: a survivor is a refusal the
+  # suite would not notice going missing. Fails under the threshold in
+  # stryker.config.mjs.
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run mutate

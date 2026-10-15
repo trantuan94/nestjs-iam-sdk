@@ -1,0 +1,177 @@
+{
+  "x-source": {
+    "document": "nestjs-iam-service/swagger.json",
+    "ref": "b8a8ce613b5ad94d5c8de7416f70454bfd9d5bdc"
+  },
+  "info": {
+    "title": "IAM Service",
+    "version": "0.0.1"
+  },
+  "paths": {
+    "/auth/authorize": {
+      "post": {
+        "description": "Check if a user (identified by their JWT) can perform an action on a registered resource type. Called by external services using their API key. Evaluates both RBAC (permission codes) and ABAC (attribute-based policies). Environment context (client IP, timestamp) is injected automatically.",
+        "operationId": "authorize",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AuthorizeRequestDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "User's JWT access token forwarded from the external service"
+          },
+          "resource": {
+            "type": "object",
+            "description": "Resource attributes — must include \"type\" (registered resource type code). Additional attributes (id, namespaceId, ...) are used by ABAC conditions.",
+            "example": {
+              "type": "products",
+              "id": "prod-123",
+              "namespaceId": "ns-1"
+            }
+          },
+          "action": {
+            "type": "string",
+            "example": "products:read",
+            "description": "The full permission code to check, `<resourceType>:<action>` — e.g. \"products:read\" for a tenant type, or \"master:users:read\" for the platform `users` type. It must be one the resource type carries."
+          },
+          "environment": {
+            "type": "object",
+            "description": "Additional environment attributes passed to ABAC conditions. Server always injects ip (from request headers) and timestamp — these cannot be overridden by the caller.",
+            "example": {
+              "region": "us-east-1"
+            }
+          }
+        },
+        "required": [
+          "token",
+          "resource",
+          "action"
+        ]
+      },
+      "AuthorizeResponseDto": {
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "description": "Whether the user is allowed to perform the action"
+          },
+          "userId": {
+            "type": "string",
+            "description": "User ID extracted from the token"
+          },
+          "action": {
+            "type": "string",
+            "example": "products:read",
+            "description": "The permission code that was checked, as sent"
+          },
+          "resourceType": {
+            "type": "string",
+            "example": "products"
+          }
+        },
+        "required": [
+          "allowed",
+          "userId",
+          "action",
+          "resourceType"
+        ]
+      },
+      "ErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number",
+            "example": 400,
+            "description": "HTTP status code"
+          },
+          "code": {
+            "type": "string",
+            "example": "VALIDATION_EXCEPTION",
+            "description": "Stable error identifier. Branch on this, never on `message`, which is prose."
+          },
+          "errorCode": {
+            "type": "string",
+            "example": "9300009",
+            "description": "Numeric error code: 93 + 00 + the ErrorCode enum value"
+          },
+          "message": {
+            "type": "object",
+            "example": "Validation exception",
+            "description": "Short summary, stable for a given `code`. An array of field messages for validation failures."
+          },
+          "description": {
+            "type": "string",
+            "example": "namespaceId must be a UUID",
+            "description": "Explanation specific to this occurrence"
+          },
+          "path": {
+            "type": "string",
+            "example": "/api/iam/users",
+            "description": "Request path"
+          },
+          "method": {
+            "type": "string",
+            "example": "POST",
+            "description": "Request method"
+          },
+          "requestId": {
+            "type": "string",
+            "example": "018f3a...",
+            "description": "Correlation id stamped by RequestIdMiddleware. Quote this in a support report."
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2026-08-21T00:00:00.000Z",
+            "description": "ISO-8601 timestamp"
+          }
+        },
+        "required": [
+          "statusCode",
+          "code",
+          "errorCode",
+          "message",
+          "description",
+          "path",
+          "method",
+          "timestamp"
+        ]
+      }
+    }
+  }
+}
