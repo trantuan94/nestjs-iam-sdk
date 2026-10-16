@@ -225,6 +225,14 @@ It does not need `IamAuthzModule` to be imported.
 When several requirements on one route fail differently, the client hears about its
 credential first: signing in again may fix the rest.
 
+IAM limits `POST /auth/authorize` **per API key**: by default 6000 requests per key
+per minute, counting every decision, `allowed: false` included. Over the limit it
+answers 429 with `Retry-After`, which reaches your client as the 503 above, with the
+same `Retry-After`. If the limit is too low for your traffic, ask the IAM operator to
+raise `RATE_LIMIT_AUTHORIZE_PER_KEY_LIMIT`, or turn on the [decision
+cache](#decision-cache) to cut repeated calls. Splitting one service across several
+keys to get more headroom works, but it defeats the point of the limit.
+
 Pass `exceptionFactory: (failure) => …` to render them your way. `failure.kind` is one of
 `missing-token`, `unauthenticated`, `denied`, `misconfigured`, `unavailable` and
 `undeclared-route`.
