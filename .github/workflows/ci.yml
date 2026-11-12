@@ -53,7 +53,17 @@ jobs:
           npm install --no-save
           @nestjs/common@^12 @nestjs/core@^12 @nestjs/testing@^12
           @nestjs/platform-express@^12 @nestjs/platform-fastify@^12 @nestjs/swagger@^12
-      - run: npm ls @nestjs/common @nestjs/core
+      # Not `npm ls`: it exits 1 on a version outside the devDependency range,
+      # which is exactly what --no-save installed. Assert the major instead, so
+      # this job cannot quietly run the suite against 11.
+      - name: Nest 12 is what the suite will run against
+        run: |
+          node -e '
+            for (const p of ["@nestjs/common", "@nestjs/core", "@nestjs/testing", "@nestjs/swagger"]) {
+              const v = require(p + "/package.json").version;
+              console.log(p, v);
+              if (!v.startsWith("12.")) { console.error(p + " is " + v + ", not 12"); process.exit(1); }
+            }'
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
