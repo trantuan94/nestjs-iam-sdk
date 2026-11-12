@@ -1,7 +1,12 @@
 import { FakeIam, iamError } from '../../test/fake-iam';
 import { resolveOptions } from '../options';
 import { IamAuthzClient, isTokenRefusal } from './iam-authz.client';
-import { IamMisconfigurationError, IamUnauthenticatedError, IamUnavailableError } from './errors';
+import {
+  IamMisconfigurationError,
+  IamPermissionDeniedError,
+  IamUnauthenticatedError,
+  IamUnavailableError,
+} from './errors';
 
 const REQUEST = { token: 't', action: 'invoices:read', resource: { type: 'invoices' } };
 
@@ -54,6 +59,17 @@ describe('IamAuthzClient', () => {
     iam.answer = () => ({ status, body: iamError(status, code, 'x') });
 
     await expect(client.authorize(REQUEST)).rejects.toBeInstanceOf(type);
+  });
+
+  it('names authorize:check when the key is not granted it', async () => {
+    iam.answer = () => ({ status: 403, body: iamError(403, 'API_KEY_PERMISSION_DENIED', 'x') });
+
+    const error = await client.authorize(REQUEST).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(IamPermissionDeniedError);
+    // Still a misconfiguration: the guard refuses with its 500, never the user's fault
+    expect(error).toBeInstanceOf(IamMisconfigurationError);
+    expect(error).toMatchObject({ permission: 'authorize:check', status: 403, code: 'API_KEY_PERMISSION_DENIED' });
   });
 
   it('keeps the service code and request id on a refused token', async () => {

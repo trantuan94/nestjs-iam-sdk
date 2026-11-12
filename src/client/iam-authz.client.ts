@@ -4,6 +4,7 @@ import { sendToIam } from '../http/iam-transport';
 import { AuthorizeRequest, AuthorizeResponse, IamErrorBody } from './contract';
 import {
   IamMisconfigurationError,
+  IamPermissionDeniedError,
   IamUnauthenticatedError,
   IamUnavailableError,
 } from './errors';
@@ -98,8 +99,14 @@ export class IamAuthzClient implements AuthorizationClient {
       );
     }
 
+    // The key is valid but not granted `authorize:check` (the service's
+    // ADR-0064): still a misconfiguration, named so it says what to grant.
+    if (status === 403 && errorBody.code === 'API_KEY_PERMISSION_DENIED') {
+      throw new IamPermissionDeniedError('authorize:check', errorBody);
+    }
+
     // 400 (an unregistered or foreign resource type, a payload that failed
-    // validation), 403, 404 (a `baseUrl` missing its prefix) and anything else:
+    // validation), any other 403, 404 (a `baseUrl` missing its prefix) and anything else:
     // the calling service is wrong, and no end user can fix it.
     throw new IamMisconfigurationError(
       `IAM answered ${status}${errorBody.description ? `: ${errorBody.description}` : ''}`,
