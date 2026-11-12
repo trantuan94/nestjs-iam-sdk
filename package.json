@@ -1,7 +1,7 @@
 {
   "name": "@trantuan94/nestjs-iam-sdk",
-  "version": "0.2.0",
-  "description": "NestJS decorators, guard and client for nestjs-iam-service's POST /auth/authorize \u2014 fail-closed authorization for resource services.",
+  "version": "0.3.0",
+  "description": "NestJS decorators, guard and client for nestjs-iam-service's POST /auth/authorize — fail-closed authorization for resource services.",
   "keywords": [
     "nestjs",
     "iam",
@@ -99,5 +99,9 @@
     "ts-jest": "^29.4.14",
     "typescript": "5.9",
     "typescript-eslint": "^8.71.2"
+  },
+  "dependencies": {
+    "changeset": "^0.2.6",
+    "version": "^0.1.2"
   }
 }
