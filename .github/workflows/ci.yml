@@ -32,6 +32,50 @@ jobs:
           npm i --silent "$GITHUB_WORKSPACE"/trantuan94-nestjs-iam-sdk-*.tgz @nestjs/common @nestjs/core reflect-metadata rxjs
           node -e "require('@trantuan94/nestjs-iam-sdk'); require('@trantuan94/nestjs-iam-sdk/testing'); console.log('ok')"
 
+  # The peer range admits Nest 12, which is ESM-only. The devDependencies stay
+  # on 11 so the matrix above runs on Node 20 and 22; this runs the suite
+  # against 12 instead. Jest loads an ESM package through `require` only from
+  # Node 24.9, with --experimental-vm-modules — the test runner's floor, not
+  # the SDK's: the published CommonJS build loads Nest 12 through Node's own
+  # require(esm), which the tarball check below proves.
+  nest-12:
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --experimental-vm-modules --disable-warning=ExperimentalWarning
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: >-
+          npm install --no-save
+          @nestjs/common@^12 @nestjs/core@^12 @nestjs/testing@^12
+          @nestjs/platform-express@^12 @nestjs/platform-fastify@^12 @nestjs/swagger@^12
+      # Not `npm ls`: it exits 1 on a version outside the devDependency range,
+      # which is exactly what --no-save installed. Assert the major instead, so
+      # this job cannot quietly run the suite against 11.
+      - name: Nest 12 is what the suite will run against
+        run: |
+          node -e '
+            for (const p of ["@nestjs/common", "@nestjs/core", "@nestjs/testing", "@nestjs/swagger"]) {
+              const v = require(p + "/package.json").version;
+              console.log(p, v);
+              if (!v.startsWith("12.")) { console.error(p + " is " + v + ", not 12"); process.exit(1); }
+            }'
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: The published tarball loads with Nest 12
+        env:
+          NODE_OPTIONS: ''
+        run: |
+          npm pack --silent
+          mkdir -p /tmp/consumer && cd /tmp/consumer && npm init -y >/dev/null
+          npm i --silent "$GITHUB_WORKSPACE"/trantuan94-nestjs-iam-sdk-*.tgz @nestjs/common@^12 @nestjs/core@^12 reflect-metadata rxjs
+          node -e "require('@trantuan94/nestjs-iam-sdk'); require('@trantuan94/nestjs-iam-sdk/testing'); console.log('ok')"
+
   # The code that decides allow / deny, mutated: a survivor is a refusal the
   # suite would not notice going missing. Fails under the threshold in
   # stryker.config.mjs.

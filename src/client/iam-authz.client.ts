@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { IAM_AUTHZ_OPTIONS, ResolvedIamAuthzOptions } from '../options';
+import { sendToIam } from '../http/iam-transport';
 import { AuthorizeRequest, AuthorizeResponse, IamErrorBody } from './contract';
 import {
   IamMisconfigurationError,
@@ -36,14 +37,6 @@ export const isTokenRefusal = (body: IamErrorBody): boolean =>
     body.description !== undefined &&
     TOKEN_DESCRIPTIONS.has(body.description));
 
-const parseJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-};
-
 const isDecision = (value: unknown): value is AuthorizeResponse => {
   const v = value as Partial<AuthorizeResponse> | null;
   return (
@@ -53,14 +46,6 @@ const isDecision = (value: unknown): value is AuthorizeResponse => {
     typeof v.action === 'string' &&
     typeof v.resourceType === 'string'
   );
-};
-
-const retryAfterOf = (header: string | null): number | undefined => {
-  if (!header) return undefined;
-  const seconds = Number(header);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds);
-  const at = Date.parse(header);
-  return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - Date.now()) / 1000));
 };
 
 /**
@@ -74,46 +59,14 @@ const retryAfterOf = (header: string | null): number | undefined => {
  */
 @Injectable()
 export class IamAuthzClient implements AuthorizationClient {
-  private readonly url: string;
-
-  constructor(@Inject(IAM_AUTHZ_OPTIONS) private readonly options: ResolvedIamAuthzOptions) {
-    this.url = `${options.baseUrl}/auth/authorize`;
-  }
+  constructor(@Inject(IAM_AUTHZ_OPTIONS) private readonly options: ResolvedIamAuthzOptions) {}
 
   async authorize(request: AuthorizeRequest): Promise<AuthorizeResponse> {
-    let response: Response;
-    try {
-      response = await fetch(this.url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json',
-          'x-api-key': this.options.apiKey.reveal(),
-        },
-        body: JSON.stringify(request),
-        signal: AbortSignal.timeout(this.options.timeoutMs),
-      });
-    } catch (error) {
-      const timedOut = (error as Error)?.name === 'TimeoutError';
-      throw new IamUnavailableError(
-        timedOut
-          ? `IAM did not answer within ${this.options.timeoutMs}ms`
-          : `IAM could not be reached: ${(error as Error)?.message ?? String(error)}`,
-      );
-    }
-
-    let text = '';
-    try {
-      text = await response.text();
-    } catch (error) {
-      throw new IamUnavailableError(
-        `IAM's answer could not be read: ${(error as Error)?.message ?? String(error)}`,
-        response.status,
-      );
-    }
-    const body = parseJson(text);
-    const errorBody = (body && typeof body === 'object' ? body : {}) as IamErrorBody;
-    const status = response.status;
+    const { status, body, errorBody, retryAfterSeconds } = await sendToIam(this.options, {
+      method: 'POST',
+      path: '/auth/authorize',
+      body: request,
+    });
 
     if (status === 200) {
       if (isDecision(body)) {
@@ -140,7 +93,7 @@ export class IamAuthzClient implements AuthorizationClient {
       throw new IamUnavailableError(
         `IAM answered ${status}`,
         status,
-        retryAfterOf(response.headers.get('retry-after')),
+        retryAfterSeconds,
         errorBody,
       );
     }

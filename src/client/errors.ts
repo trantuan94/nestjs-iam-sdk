@@ -42,6 +42,26 @@ export class IamMisconfigurationError extends IamAuthzError {
 }
 
 /**
+ * The calling service's API key is valid but not GRANTED the permission a
+ * `/service/*` read needs (`API_KEY_PERMISSION_DENIED`). An operator fixes it
+ * by granting the key that permission on IAM's control plane; a
+ * misconfiguration, so it is one, and loud.
+ */
+export class IamPermissionDeniedError extends IamMisconfigurationError {
+  constructor(
+    /** The permission the route needs, e.g. `roles:read`. */
+    readonly permission: string,
+    body?: IamErrorBody,
+  ) {
+    super(
+      `This service's IAM API key is not granted '${permission}'. Grant it on IAM's control plane (PATCH /master/namespaces/:ns/api-keys/:id, permissions).`,
+      403,
+      body,
+    );
+  }
+}
+
+/**
  * No decision could be had: a timeout, a network error, a 429 or a 5xx, or a
  * body that is not the contract. The SDK always denies in this case.
  */

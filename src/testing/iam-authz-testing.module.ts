@@ -4,17 +4,23 @@ import { IAM_AUTHZ_CLIENT } from '../client/iam-authz.client';
 import { CORE_EXPORTS, coreProviders } from '../iam-authz.module';
 import { IAM_AUTHZ_OPTIONS, resolveOptions, type IamAuthzOptions } from '../options';
 import { FakeIamAuthzClient, type FakeRule } from './fake-iam-authz.client';
+import { IamServiceClient } from '../service/iam-service.client';
+import { FakeIamServiceClient, type FakeServiceData } from './fake-iam-service.client';
 
 export interface IamAuthzTestingOptions
   extends Partial<Omit<IamAuthzOptions, 'baseUrl' | 'apiKey'>> {
   rules?: FakeRule[];
   /** The id every decision reports as the verified user. Default `test-user`. */
   userId?: string;
+  /** What `IamServiceClient` answers — accounts, roles, resource types, tokens. */
+  service?: FakeServiceData;
 }
 
 /**
  * The real guard, decorators and `IamAuthz`, with IAM replaced by
- * `FakeIamAuthzClient`. Get the fake with `moduleRef.get(FakeIamAuthzClient)`.
+ * `FakeIamAuthzClient`, and `IamServiceClient` by `FakeIamServiceClient`. Get
+ * either fake with `moduleRef.get(FakeIamAuthzClient)` /
+ * `moduleRef.get(FakeIamServiceClient)`.
  *
  * ```ts
  * Test.createTestingModule({
@@ -27,9 +33,10 @@ export interface IamAuthzTestingOptions
 @Module({})
 export class IamAuthzTestingModule {
   static forRoot(options: IamAuthzTestingOptions = {}): DynamicModule {
-    const { rules, userId, ...rest } = options;
+    const { rules, userId, service, ...rest } = options;
     const resolved = resolveOptions({ ...rest, baseUrl: 'http://iam.test', apiKey: 'test-api-key' });
     const fake = new FakeIamAuthzClient(rules, userId);
+    const serviceFake = new FakeIamServiceClient(service);
     return {
       module: IamAuthzTestingModule,
       imports: [DiscoveryModule],
@@ -37,9 +44,11 @@ export class IamAuthzTestingModule {
         { provide: IAM_AUTHZ_OPTIONS, useValue: resolved },
         { provide: FakeIamAuthzClient, useValue: fake },
         { provide: IAM_AUTHZ_CLIENT, useExisting: FakeIamAuthzClient },
+        { provide: FakeIamServiceClient, useValue: serviceFake },
+        { provide: IamServiceClient, useExisting: FakeIamServiceClient },
         ...coreProviders(!!resolved.global),
       ],
-      exports: [...CORE_EXPORTS, FakeIamAuthzClient],
+      exports: [...CORE_EXPORTS, FakeIamAuthzClient, FakeIamServiceClient],
     };
   }
 }

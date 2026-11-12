@@ -39,6 +39,7 @@ export {
   IamUnauthenticatedError,
   IamMisconfigurationError,
   IamUnavailableError,
+  IamPermissionDeniedError,
 } from './client/errors';
 export type {
   AuthorizeRequest,
@@ -46,6 +47,19 @@ export type {
   AuthorizeResource,
   AuthorizeEnvironment,
 } from './client/contract';
+
+export { IamServiceClient, type ServiceReadsClient } from './service/iam-service.client';
+export {
+  ACCOUNT_LOOKUP_MAX,
+  type ServicePermission,
+  type ServiceAccount,
+  type AccountContact,
+  type TokenIntrospection,
+  type ServiceRole,
+  type ServiceResourceType,
+  type Page,
+  type ListQuery,
+} from './service/contract';
 
 export { InMemoryDecisionCache, type DecisionCache } from './decision/decision-cache';
 export { bearer, fromTokenHeader, firstOf, type TokenExtractor } from './http/token-extractor';

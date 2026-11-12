@@ -1,7 +1,7 @@
 {
   "name": "@trantuan94/nestjs-iam-sdk",
   "version": "0.2.0",
-  "description": "NestJS decorators, guard and client for nestjs-iam-service's POST /auth/authorize — fail-closed authorization for resource services.",
+  "description": "NestJS decorators, guard and client for nestjs-iam-service's POST /auth/authorize \u2014 fail-closed authorization for resource services.",
   "keywords": [
     "nestjs",
     "iam",
@@ -66,9 +66,9 @@
     "mutate": "stryker run"
   },
   "peerDependencies": {
-    "@nestjs/common": "^10.0.0 || ^11.0.0",
-    "@nestjs/core": "^10.0.0 || ^11.0.0",
-    "@nestjs/swagger": "^7.0.0 || ^8.0.0 || ^11.0.0",
+    "@nestjs/common": "^10.0.0 || ^11.0.0 || ^12.0.0",
+    "@nestjs/core": "^10.0.0 || ^11.0.0 || ^12.0.0",
+    "@nestjs/swagger": "^7.0.0 || ^8.0.0 || ^11.0.0 || ^12.0.0",
     "reflect-metadata": "^0.1.13 || ^0.2.0",
     "rxjs": "^7.0.0"
   },

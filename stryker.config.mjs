@@ -15,6 +15,10 @@ export default {
   jest: { configFile: 'jest.config.js', enableFindRelatedTests: false },
   mutate: [
     'src/client/iam-authz.client.ts',
+    // The fetch, timeout and body read the client used to hold itself: moved,
+    // not dropped from the mutation run.
+    'src/http/iam-transport.ts',
+    'src/service/iam-service.client.ts',
     'src/guard/iam-authz.guard.ts',
     'src/checker/iam-authz.service.ts',
     'src/checker/failure.ts',

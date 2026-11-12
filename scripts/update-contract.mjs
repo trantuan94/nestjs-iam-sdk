@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Refreshes contract/authorize.openapi.json from nestjs-iam-service's committed
- * swagger.json — the parts of it this SDK depends on, and nothing else.
+ * swagger.json — the parts of it this SDK depends on, and nothing else:
+ * `/auth/authorize` and the `/service/*` reads `IamServiceClient` calls.
  *
  *   npm run contract:update                       # ../nestjs-iam-service/swagger.json
  *   npm run contract:update -- path/to/swagger.json
@@ -23,10 +24,47 @@ const text = /^https?:\/\//.test(source)
   : await readFile(source, 'utf8');
 const document = JSON.parse(text);
 
-const path = document.paths?.['/auth/authorize'];
-if (!path?.post) throw new Error(`${source} has no POST /auth/authorize`);
+// The routes this SDK calls, and the schemas their bodies are.
+const PATHS = {
+  '/auth/authorize': ['post'],
+  '/service/tokens/introspect': ['post'],
+  '/service/accounts/{userId}': ['get'],
+  '/service/accounts/lookup': ['post'],
+  '/service/accounts/contact': ['post'],
+  '/service/accounts/{userId}/contact': ['get'],
+  '/service/roles': ['get'],
+  '/service/accounts/{userId}/roles': ['get'],
+  '/service/accounts/{userId}/permissions': ['get'],
+  '/service/resource-types': ['get'],
+};
+const paths = Object.fromEntries(
+  Object.entries(PATHS).map(([route, methods]) => {
+    const item = document.paths?.[route];
+    for (const method of methods) {
+      if (!item?.[method]) throw new Error(`${source} has no ${method.toUpperCase()} ${route}`);
+    }
+    return [route, Object.fromEntries(methods.map((m) => [m, item[m]]))];
+  }),
+);
 
-const SCHEMAS = ['AuthorizeRequestDto', 'AuthorizeResponseDto', 'ErrorResponseDto'];
+const SCHEMAS = [
+  'AuthorizeRequestDto',
+  'AuthorizeResponseDto',
+  'ErrorResponseDto',
+  'TokenIntrospectionRequestDto',
+  'TokenIntrospectionResponseDto',
+  'ServiceAccountResponseDto',
+  'AccountLookupRequestDto',
+  'AccountLookupResponseDto',
+  'AccountContactRequestDto',
+  'AccountContactResponseDto',
+  'ServiceRoleResponseDto',
+  'ServiceRoleListResponseDto',
+  'AccountRolesResponseDto',
+  'AccountPermissionsResponseDto',
+  'ServiceResourceTypeResponseDto',
+  'ServiceResourceTypeListResponseDto',
+];
 const schemas = Object.fromEntries(
   SCHEMAS.map((name) => {
     const schema = document.components?.schemas?.[name];
@@ -47,7 +85,7 @@ if (!/^https?:\/\//.test(source)) {
 const snapshot = {
   'x-source': { document: source.startsWith('http') ? source : 'nestjs-iam-service/swagger.json', ref },
   info: { title: document.info?.title, version: document.info?.version },
-  paths: { '/auth/authorize': path },
+  paths,
   components: { schemas },
 };
 const out = resolve(here, '../contract/authorize.openapi.json');
