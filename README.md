@@ -38,8 +38,10 @@ CommonJS and loads it through Node's `require(esm)` (Node 20.19+ / 22.12+).
    (`invoices` with `read`, `approve`, …). Its permission codes are `invoices:read` and so on.
    Grant them to roles.
 2. **Have an operator issue an API key** for this service's project, on IAM's control plane
-   (`POST /master/namespaces/:ns/api-keys`), and keep it in a secret. Grant it the permissions
-   of the `IamServiceClient` reads you use (below); `/auth/authorize` needs none.
+   (`POST /master/namespaces/:ns/api-keys`), and keep it in a secret. `@Authorize` and `@Authz()`
+   need `authorize:check` — a new key holds it unless created with `permissions: []`, and every
+   key that existed when IAM began requiring it was granted it. Grant the permissions of the
+   `IamServiceClient` reads you use, too (below).
 3. **Check IAM's rate limit.** nestjs-iam-service limits every route per caller IP, and that
    includes `/auth/authorize`, where the caller is *your service*. Every authorized request
    is one call, so size the limit for that, or turn on the cache below.
@@ -224,7 +226,7 @@ It does not need `IamAuthzModule` to be imported.
 | No token on the request | **401** `MISSING_ACCESS_TOKEN`. IAM is not called |
 | IAM refused the token: `INVALID_JWT`, `TOKEN_REVOKED`, MFA not completed | **401**, with IAM's `code`, so a client knows whether to sign in again or finish MFA |
 | IAM said `allowed: false` | **403** |
-| This service is misconfigured: API key invalid or of an inactive user, resource type not registered or owned by another tenant, payload rejected, wrong `baseUrl` | **500** `AUTHORIZATION_MISCONFIGURED`, logged at error level; no detail reaches the client |
+| This service is misconfigured: API key invalid or not granted `authorize:check` (`IamPermissionDeniedError`), resource type not registered or owned by another tenant, payload rejected, wrong `baseUrl` | **500** `AUTHORIZATION_MISCONFIGURED`, logged at error level; no detail reaches the client |
 | IAM unavailable: timeout, network error, 429, 5xx, a 200 that isn't a decision | **503** `AUTHORIZATION_UNAVAILABLE`, with `Retry-After` when IAM sent one |
 
 When several requirements on one route fail differently, the client hears about its
