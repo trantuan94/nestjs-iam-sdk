@@ -2,6 +2,7 @@ import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 export interface RecordedCall {
+  method: string;
   path: string;
   headers: IncomingHttpHeaders;
   body: any;
@@ -41,7 +42,7 @@ export class FakeIam {
         } catch {
           body = data;
         }
-        const call: RecordedCall = { path: req.url ?? '', headers: req.headers, body };
+        const call: RecordedCall = { method: req.method ?? '', path: req.url ?? '', headers: req.headers, body };
         this.calls.push(call);
         const answer = this.answer(call);
         const send = () => {

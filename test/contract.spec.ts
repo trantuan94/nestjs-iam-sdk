@@ -4,6 +4,11 @@ import {
   AUTHORIZE_REQUEST_REQUIRED,
   AUTHORIZE_RESPONSE_KEYS,
 } from '../src/client/contract';
+import {
+  ACCOUNT_LOOKUP_MAX,
+  SERVICE_RESPONSE_KEYS,
+  SERVICE_ROUTES,
+} from '../src/service/contract';
 
 /**
  * The SDK's idea of `POST /auth/authorize` against the service's own OpenAPI
@@ -15,7 +20,7 @@ import {
  */
 interface Schema {
   type?: string;
-  properties?: Record<string, { type?: string }>;
+  properties?: Record<string, { type?: string; maxItems?: number; nullable?: boolean }>;
   required?: string[];
 }
 
@@ -71,5 +76,49 @@ describe('contract with nestjs-iam-service', () => {
     expect(Object.keys(schemas['ErrorResponseDto']?.properties ?? {})).toEqual(
       expect.arrayContaining(['statusCode', 'code', 'description']),
     );
+  });
+});
+
+/**
+ * The `/service/*` reads `IamServiceClient` calls (ADR-0063 in the service):
+ * every route it calls exists with the method it uses, is keyed by X-API-Key
+ * and answers 200, and every response field the client reads is one the
+ * service declares — no more, no fewer.
+ */
+describe('contract with nestjs-iam-service: service reads', () => {
+  const paths = snapshot.paths as unknown as Record<
+    string,
+    Record<string, { responses: Record<string, { description?: string }>; security?: unknown[] }>
+  >;
+
+  it.each(SERVICE_ROUTES.map((r) => [r.method.toUpperCase(), r.path, r] as const))(
+    '%s %s exists, keyed by X-API-Key, answering 200',
+    (_, path, route) => {
+      const operation = paths[path]?.[route.method];
+
+      expect(operation).toBeDefined();
+      expect(Object.keys(operation!.responses)).toContain('200');
+      expect(JSON.stringify(operation!.security ?? [])).toContain('X-API-Key');
+    },
+  );
+
+  it.each(Object.entries(SERVICE_RESPONSE_KEYS))(
+    'reads exactly the fields %s declares',
+    (name, keys) => {
+      expect(Object.keys(schemas[name]?.properties ?? {}).sort()).toEqual([...keys].sort());
+    },
+  );
+
+  it('answers a by-id miss ACCOUNT_NOT_FOUND, the one 404 the client reads as null', () => {
+    const byId = SERVICE_ROUTES.filter((r) => r.path.includes('{userId}'));
+
+    expect(byId.length).toBeGreaterThan(0);
+    for (const route of byId) {
+      expect(paths[route.path]![route.method]!.responses['404']?.description).toContain('ACCOUNT_NOT_FOUND');
+    }
+  });
+
+  it('caps a lookup at the size the client batches by', () => {
+    expect(schemas['AccountLookupRequestDto']?.properties?.['identifiers']?.maxItems).toBe(ACCOUNT_LOOKUP_MAX);
   });
 });

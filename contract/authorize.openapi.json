@@ -1,7 +1,7 @@
 {
   "x-source": {
     "document": "nestjs-iam-service/swagger.json",
-    "ref": "b8a8ce613b5ad94d5c8de7416f70454bfd9d5bdc"
+    "ref": "9cb33db751065a6121a0f5dff6afbce68c23ccc5"
   },
   "info": {
     "title": "IAM Service",
@@ -33,6 +33,16 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Over the per-API-key or per-IP limit (`RATE_LIMITED`); `Retry-After` says how many seconds remain.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -43,6 +53,519 @@
         "summary": "",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/service/tokens/introspect": {
+      "post": {
+        "description": "The checks `/auth/authorize` makes — signature, type, an active account, not revoked, its session open, MFA cleared — and that the user is of the key's own project. Any refusal answers `{ active: false }` alone. Lets a service that verifies tokens locally see a revocation before the token expires.",
+        "operationId": "serviceIntrospectToken",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenIntrospectionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenIntrospectionResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted the permission (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "Whether an end user's access token is still good",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/service/accounts/{userId}": {
+      "get": {
+        "operationId": "serviceGetAccount",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccountResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted the permission (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such account in the key's own project (`ACCOUNT_NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "An account of the key's project, by id",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/service/accounts/lookup": {
+      "post": {
+        "description": "Up to 100 identifiers, matched ignoring case. Those with no account — or shared by two accounts differing by case alone — are absent from the answer. No contact details.",
+        "operationId": "serviceLookupAccounts",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountLookupRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountLookupResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted the permission (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "Accounts of the key's project, by identifier",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/service/accounts/contact": {
+      "post": {
+        "description": "For a service holding an API key granted `profiles:read`: the email address and name of an account of the key's own project, matched by identifier ignoring case. An unknown identifier, an account with no address and one that is not active all answer `email: null`. Every address returned is audited.",
+        "operationId": "serviceAccountContact",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountContactRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountContactResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted `profiles:read` (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Over the per-API-key limit (`RATE_LIMITED`), shared with /auth/authorize",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "An account's contact details, by identifier",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/service/accounts/{userId}/contact": {
+      "get": {
+        "description": "For a service holding an API key granted `profiles:read` and the user's id (`sub`): the email address and name of an account of the key's own project. An id outside that project is a 404; an account with no address or that is not active answers `email: null`. Every address returned is audited.",
+        "operationId": "serviceAccountContactById",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountContactResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted `profiles:read` (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such account in the key's own project (`ACCOUNT_NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "An account's contact details, by id",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/service/roles": {
+      "get": {
+        "operationId": "serviceListRoles",
+        "parameters": [
+          {
+            "name": "searchKey",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive partial match on code or name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based). Default: 1",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page. Default: 20, max: 100",
+            "schema": {
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRoleListResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted the permission (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "The roles of the key's project",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/service/accounts/{userId}/roles": {
+      "get": {
+        "operationId": "serviceGetAccountRoles",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRolesResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted the permission (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such account in the key's own project (`ACCOUNT_NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "The roles assigned to an account of the key's project",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/service/accounts/{userId}/permissions": {
+      "get": {
+        "operationId": "serviceGetAccountPermissions",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountPermissionsResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted the permission (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such account in the key's own project (`ACCOUNT_NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "The permission codes an account of the key's project holds",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/service/resource-types": {
+      "get": {
+        "operationId": "serviceListResourceTypes",
+        "parameters": [
+          {
+            "name": "searchKey",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive partial match on code or name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based). Default: 1",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page. Default: 20, max: 100",
+            "schema": {
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceResourceTypeListResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted the permission (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "The resource types of the key's project, with their actions",
+        "tags": [
+          "service"
         ]
       }
     }
@@ -131,14 +654,21 @@
             "description": "Numeric error code: 93 + 00 + the ErrorCode enum value"
           },
           "message": {
-            "type": "object",
+            "type": "string",
             "example": "Validation exception",
-            "description": "Short summary, stable for a given `code`. An array of field messages for validation failures."
+            "description": "Short summary, stable for a given `code`"
           },
           "description": {
             "type": "string",
             "example": "namespaceId must be a UUID",
             "description": "Explanation specific to this occurrence"
+          },
+          "errors": {
+            "description": "Each field the request got wrong — validation failures only",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldErrorDto"
+            }
           },
           "path": {
             "type": "string",
@@ -170,6 +700,330 @@
           "path",
           "method",
           "timestamp"
+        ]
+      },
+      "TokenIntrospectionRequestDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "An end user's access token, forwarded by the resource service. In the body, so it stays out of access logs"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "TokenIntrospectionResponseDto": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "sub": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The user id"
+          },
+          "identifier": {
+            "type": "string",
+            "example": "ada.lovelace"
+          },
+          "sessionId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The session the token was minted for"
+          },
+          "mfaCleared": {
+            "type": "boolean",
+            "description": "Whether the session may pass the MFA gate (Clearance)"
+          },
+          "exp": {
+            "type": "number",
+            "description": "Expiry, in seconds since the epoch",
+            "example": 1767225600
+          }
+        },
+        "required": [
+          "active"
+        ]
+      },
+      "ServiceAccountResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "identifier": {
+            "type": "string",
+            "example": "ada.lovelace"
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserStatus"
+              }
+            ]
+          },
+          "isVerified": {
+            "type": "boolean",
+            "description": "Whether the email address was verified"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "identifier",
+          "status",
+          "isVerified",
+          "createdAt"
+        ]
+      },
+      "AccountLookupRequestDto": {
+        "type": "object",
+        "properties": {
+          "identifiers": {
+            "minItems": 1,
+            "maxItems": 100,
+            "example": [
+              "ada.lovelace",
+              "grace.hopper"
+            ],
+            "description": "Identifiers in the API key's own project, matched ignoring case. In the body, not the URL, so they stay out of access logs",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "identifiers"
+        ]
+      },
+      "AccountLookupResponseDto": {
+        "type": "object",
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceAccountResponseDto"
+            }
+          }
+        },
+        "required": [
+          "accounts"
+        ]
+      },
+      "AccountContactRequestDto": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "example": "ada.lovelace",
+            "maxLength": 50,
+            "description": "The account's identifier in the API key's own project, matched ignoring case. In the body, not the URL, so it stays out of access logs"
+          }
+        },
+        "required": [
+          "identifier"
+        ]
+      },
+      "AccountContactResponseDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "example": "ada@example.com"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true,
+            "example": "Ada"
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true,
+            "example": "Lovelace"
+          }
+        },
+        "required": [
+          "email",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "ServiceRoleResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "example": "editor"
+          },
+          "name": {
+            "type": "string",
+            "example": "Editor"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name"
+        ]
+      },
+      "ServiceRoleListResponseDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
+          },
+          "hasNext": {
+            "type": "boolean"
+          },
+          "hasPrev": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceRoleResponseDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "limit",
+          "totalPages",
+          "hasNext",
+          "hasPrev",
+          "data"
+        ]
+      },
+      "AccountRolesResponseDto": {
+        "type": "object",
+        "properties": {
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceRoleResponseDto"
+            }
+          }
+        },
+        "required": [
+          "roles"
+        ]
+      },
+      "AccountPermissionsResponseDto": {
+        "type": "object",
+        "properties": {
+          "permissions": {
+            "example": [
+              "products:read",
+              "products:write"
+            ],
+            "description": "The permission codes the account holds, sorted",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "permissions"
+        ]
+      },
+      "ServiceResourceTypeResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "example": "products"
+          },
+          "name": {
+            "type": "string",
+            "example": "Products"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowedActions": {
+            "example": [
+              "read",
+              "write"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "description",
+          "allowedActions"
+        ]
+      },
+      "ServiceResourceTypeListResponseDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
+          },
+          "hasNext": {
+            "type": "boolean"
+          },
+          "hasPrev": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceResourceTypeResponseDto"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "page",
+          "limit",
+          "totalPages",
+          "hasNext",
+          "hasPrev",
+          "data"
         ]
       }
     }

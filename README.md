@@ -16,6 +16,9 @@ findOne(@Param('id') id: string, @AuthorizedUser() userId: string) { … }
 - **The identity is IAM's.** `@AuthorizedUser()` returns the `userId` IAM verified. This
   service never trusts the token's own claims.
 - **Optional decision cache**, off by default, plus request coalescing, which is always on.
+- **Reads of IAM itself** with the same key: whether a token is still good, an account, its
+  contact details, roles and permissions — `IamServiceClient`, each read behind a permission
+  the key is granted.
 - **A testing entry point** so your specs need no IAM at all.
 
 ## Install
@@ -24,17 +27,19 @@ findOne(@Param('id') id: string, @AuthorizedUser() userId: string) { … }
 npm i @trantuan94/nestjs-iam-sdk
 ```
 
-Peer dependencies are `@nestjs/common` and `@nestjs/core` 10 or 11, `reflect-metadata` and
+Peer dependencies are `@nestjs/common` and `@nestjs/core` 10, 11 or 12, `reflect-metadata` and
 `rxjs` 7. `@nestjs/swagger` is optional; when present, routes are documented. Node 20 or later
-is required: the client uses the built-in `fetch`.
+is required: the client uses the built-in `fetch`. Nest 12 is ESM-only; this package is
+CommonJS and loads it through Node's `require(esm)` (Node 20.19+ / 22.12+).
 
 ## Before you start
 
 1. **Register the resource type in IAM** under your tenant's namespace, with its actions
    (`invoices` with `read`, `approve`, …). Its permission codes are `invoices:read` and so on.
    Grant them to roles.
-2. **Create an API key** for this service (`POST /api-keys` as a user of your namespace), and
-   keep it in a secret.
+2. **Have an operator issue an API key** for this service's project, on IAM's control plane
+   (`POST /master/namespaces/:ns/api-keys`), and keep it in a secret. Grant it the permissions
+   of the `IamServiceClient` reads you use (below); `/auth/authorize` needs none.
 3. **Check IAM's rate limit.** nestjs-iam-service limits every route per caller IP, and that
    includes `/auth/authorize`, where the caller is *your service*. Every authorized request
    is one call, so size the limit for that, or turn on the cache below.
@@ -247,6 +252,50 @@ IamAuthzModule.forRoot({ …, cache: { ttlMs: 3_000, maxEntries: 10_000 } })
 
 Independently of the cache, concurrent identical checks share one call to IAM.
 
+## Reading IAM — `IamServiceClient`
+
+The module also provides `IamServiceClient`, for IAM's *service reads* (`/service/*`). It uses
+the same `baseUrl`, `apiKey` and `timeoutMs`, and reads only the key's own project. Each method
+needs one permission granted to the key:
+
+| Method | Permission | Answers |
+|---|---|---|
+| `introspectToken(token)` | `tokens:introspect` | `{ active: true, sub, identifier, sessionId, mfaCleared, exp }`, or `{ active: false }` for any refusal — invalid, expired, revoked, a signed-out session, MFA not cleared, another project |
+| `getAccount(userId)` | `accounts:read` | `{ id, identifier, status, isVerified, createdAt }` or `null` |
+| `lookupAccounts(identifiers)` | `accounts:read` | the accounts found, matched ignoring case; any number, sent 100 a call |
+| `getContact(identifier)` | `profiles:read` | `{ email, firstName, lastName }`, `email: null` for any miss. Audited by IAM |
+| `getContactById(userId)` | `profiles:read` | the same, or `null`. Audited by IAM |
+| `listRoles({ page, limit, searchKey })` | `roles:read` | a page of `{ id, code, name }` |
+| `getAccountRoles(userId)` | `roles:read` | `{ id, code, name }[]` or `null` |
+| `getAccountPermissions(userId)` | `permissions:read` | the codes held, sorted, or `null` |
+| `listResourceTypes({ page, limit, searchKey })` | `permissions:read` | a page of `{ id, code, name, description, allowedActions }` |
+
+```ts
+@Injectable()
+export class InvitationsService {
+  constructor(private readonly iam: IamServiceClient) {}
+
+  async invite(identifier: string) {
+    const { email } = await this.iam.getContact(identifier);
+    if (!email) return; // no such account, no address, or not active — IAM does not say which
+    …
+  }
+}
+```
+
+`null` means *no account of this key's project* — unknown, or another project's, alike. Every
+other failure throws, by class:
+
+- `IamPermissionDeniedError` — the key lacks the permission; `error.permission` names it. A
+  subclass of `IamMisconfigurationError`.
+- `IamMisconfigurationError` — the key is refused, the request is invalid, or `baseUrl`
+  reaches no such route.
+- `IamUnavailableError` — a timeout, a network error, a 429 (`retryAfterSeconds`) or a 5xx.
+
+Introspection is a call per check, counted against the key's rate limit with
+`/auth/authorize`. Use it where a revoked token must stop working at once; a guarded route
+already gets that from `@Authorize`.
+
 ## Options
 
 | Option | Default | |
@@ -288,11 +337,33 @@ expect(iam.calls[0].resource).toMatchObject({ type: 'invoices', id: 'inv-1' });
 The real guard and decorators run; only IAM is replaced. The first matching rule decides,
 `allow('*')` matches any action, and anything no rule allows is denied.
 
+`IamServiceClient` is replaced by `FakeIamServiceClient`, which answers from what you give it,
+as IAM would — identifiers ignoring case, an unknown id `null`, a blocked account no address:
+
+```ts
+IamAuthzTestingModule.forRoot({
+  service: {
+    accounts: [{ id: 'u-1', identifier: 'ada', contact: { email: 'ada@example.com' }, roles: ['editor'] }],
+    roles: [{ id: 'r-1', code: 'editor', name: 'Editor' }],
+    tokens: { 'tok-1': { active: true, sub: 'u-1', identifier: 'ada', sessionId: 's-1', mfaCleared: true, exp: 0 } },
+    permissions: ['profiles:read', 'roles:read'], // default: all; others throw IamPermissionDeniedError
+  },
+});
+
+moduleRef.get(FakeIamServiceClient).failWith('unavailable', 1);
+```
+
 ## Compatibility
 
-The request and response types are checked against a snapshot of nestjs-iam-service's
-OpenAPI document (`contract/authorize.openapi.json`, refreshed with `npm run contract:update`).
-The snapshot records the service revision it was taken from.
+The request and response types — `/auth/authorize` and every `/service/*` read — are checked
+against a snapshot of nestjs-iam-service's OpenAPI document (`contract/authorize.openapi.json`,
+refreshed with `npm run contract:update`). The snapshot records the service revision it was
+taken from. `IamServiceClient` needs a service with the `/service/*` reads and their
+`ACCOUNT_NOT_FOUND` code; against an older one, every by-id read throws
+`IamMisconfigurationError` rather than answering `null`.
+
+Nest 10 and 11 are tested on Node 20, 22 and 24; Nest 12 on Node 24, where the test runner
+can load ESM through `require`.
 
 ## License
 

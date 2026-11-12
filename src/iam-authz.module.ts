@@ -6,6 +6,7 @@ import { IAM_AUTHZ_CLIENT, IamAuthzClient } from './client/iam-authz.client';
 import { IamAuthzGuard } from './guard/iam-authz.guard';
 import { RouteAudit } from './guard/route-audit';
 import { IAM_AUTHZ_OPTIONS, resolveOptions, type IamAuthzOptions } from './options';
+import { IamServiceClient } from './service/iam-service.client';
 
 export interface IamAuthzAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
   inject?: unknown[];
@@ -17,7 +18,7 @@ export interface IamAuthzAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
   global?: boolean;
 }
 
-/** Everything but the options and the client, shared with `IamAuthzTestingModule`. */
+/** Everything but the options and the clients, shared with `IamAuthzTestingModule`. */
 export const coreProviders = (global: boolean): Provider[] => [
   IamAuthz,
   IamAuthzGuard,
@@ -26,7 +27,14 @@ export const coreProviders = (global: boolean): Provider[] => [
   ...(global ? [{ provide: APP_GUARD, useExisting: IamAuthzGuard }] : []),
 ];
 
-export const CORE_EXPORTS = [IamAuthz, IamAuthzGuard, BindAuthzPipe, IAM_AUTHZ_OPTIONS, IAM_AUTHZ_CLIENT];
+export const CORE_EXPORTS = [
+  IamAuthz,
+  IamAuthzGuard,
+  BindAuthzPipe,
+  IAM_AUTHZ_OPTIONS,
+  IAM_AUTHZ_CLIENT,
+  IamServiceClient,
+];
 
 /**
  * ```ts
@@ -47,6 +55,7 @@ export class IamAuthzModule {
       providers: [
         { provide: IAM_AUTHZ_OPTIONS, useValue: resolved },
         { provide: IAM_AUTHZ_CLIENT, useClass: IamAuthzClient },
+        IamServiceClient,
         ...coreProviders(!!resolved.global),
       ],
       exports: CORE_EXPORTS,
@@ -73,6 +82,7 @@ export class IamAuthzModule {
           },
         },
         { provide: IAM_AUTHZ_CLIENT, useClass: IamAuthzClient },
+        IamServiceClient,
         ...coreProviders(global),
       ],
       exports: CORE_EXPORTS,
