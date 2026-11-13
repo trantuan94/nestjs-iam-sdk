@@ -289,6 +289,42 @@ describe('IamServiceClient', () => {
     });
   });
 
+  describe('revokeSessions', () => {
+    it('POSTs to the account, answers true on 204, and sends no body', async () => {
+      iam.answer = () => ({ status: 204 });
+
+      await expect(client.revokeSessions('u 1')).resolves.toBe(true);
+      expect(iam.calls[0]).toMatchObject({
+        method: 'POST',
+        path: '/api/iam/service/accounts/u%201/sessions/revoke',
+        body: '',
+      });
+      expect(iam.calls[0]!.headers['content-type']).toBeUndefined();
+    });
+
+    it('answers false for ACCOUNT_NOT_FOUND, and misconfiguration for any other 404', async () => {
+      answer(404, iamError(404, 'ACCOUNT_NOT_FOUND', 'x'));
+      await expect(client.revokeSessions('u1')).resolves.toBe(false);
+
+      answer(404, iamError(404, 'NOT_FOUND', 'Cannot POST'));
+      await expect(client.revokeSessions('u1')).rejects.toBeInstanceOf(IamMisconfigurationError);
+    });
+
+    it('names sessions:revoke when the key is not granted it', async () => {
+      answer(403, iamError(403, 'API_KEY_PERMISSION_DENIED', 'x'));
+
+      await expect(client.revokeSessions('u1')).rejects.toMatchObject({ permission: 'sessions:revoke' });
+    });
+
+    it.each([[200], [500], [503]])('does not take %i for done', async (status) => {
+      answer(status, status === 200 ? {} : iamError(status, 'X', 'x'));
+
+      await expect(client.revokeSessions('u1')).rejects.toBeInstanceOf(
+        status === 200 ? IamMisconfigurationError : IamUnavailableError,
+      );
+    });
+  });
+
   describe('lookupAccounts', () => {
     it('sends nothing for no identifiers', async () => {
       await expect(client.lookupAccounts([])).resolves.toEqual([]);

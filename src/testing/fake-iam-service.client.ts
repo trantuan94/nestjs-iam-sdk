@@ -47,6 +47,7 @@ const ALL: ServicePermission[] = [
   'profiles:read',
   'roles:read',
   'permissions:read',
+  'sessions:revoke',
 ];
 
 /**
@@ -57,6 +58,8 @@ const ALL: ServicePermission[] = [
  */
 export class FakeIamServiceClient implements ServiceReadsClient {
   readonly calls: { method: keyof ServiceReadsClient; args: unknown[] }[] = [];
+  /** The accounts `revokeSessions` signed out, in order. */
+  readonly revokedSessions: string[] = [];
   private data: Required<FakeServiceData>;
   private failure: { kind: FakeServiceFailure; remaining: number } | undefined;
 
@@ -78,6 +81,7 @@ export class FakeIamServiceClient implements ServiceReadsClient {
 
   reset(): this {
     this.calls.length = 0;
+    this.revokedSessions.length = 0;
     this.failure = undefined;
     return this;
   }
@@ -140,6 +144,13 @@ export class FakeIamServiceClient implements ServiceReadsClient {
   async listResourceTypes(query: ListQuery = {}): Promise<Page<ServiceResourceType>> {
     this.enter('listResourceTypes', 'permissions:read', [query]);
     return this.page(this.data.resourceTypes, query, (t) => [t.code, t.name]);
+  }
+
+  async revokeSessions(userId: string): Promise<boolean> {
+    this.enter('revokeSessions', 'sessions:revoke', [userId]);
+    if (!this.byId(userId)) return false;
+    this.revokedSessions.push(userId);
+    return true;
   }
 
   // ── internals ─────────────────────────────────────────────────────────────

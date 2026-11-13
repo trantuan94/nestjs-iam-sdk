@@ -279,6 +279,7 @@ needs one permission granted to the key:
 | `getAccountRoles(userId)` | `roles:read` | `{ id, code, name }[]` or `null` |
 | `getAccountPermissions(userId)` | `permissions:read` | the codes held, sorted, or `null` |
 | `listResourceTypes({ page, limit, searchKey })` | `permissions:read` | a page of `{ id, code, name, description, allowedActions }` |
+| `revokeSessions(userId)` | `sessions:revoke` | `true` once every session and device trust is ended, as an operator's Revoke Sessions; `false` for no such account. The one write. Audited by IAM |
 
 ```ts
 @Injectable()
