@@ -1,5 +1,22 @@
 # @trantuan94/nestjs-iam-sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- 89f77eb: `IamServiceClient.revokeSessions(userId)`: sign an account of the key's project out everywhere — every
+  session and every device's trust, as an operator's Revoke Sessions does — when a resource service sees a
+  compromise. Needs `sessions:revoke` (nestjs-iam-service's ADR-0065); `true` once ended, `false` for no such
+  account. `FakeIamServiceClient` records it in `revokedSessions`.
+
+### Patch Changes
+
+- 11219fb: A 403 `API_KEY_PERMISSION_DENIED` from `POST /auth/authorize` — the service's key not granted
+  `authorize:check`, which nestjs-iam-service requires since its ADR-0064 — is now an
+  `IamPermissionDeniedError` with `permission: 'authorize:check'`. It is still an
+  `IamMisconfigurationError`, so the guard answers it as before (500 `AUTHORIZATION_MISCONFIGURED`);
+  the error now names what to grant.
+
 ## 0.3.0
 
 ### Minor Changes
