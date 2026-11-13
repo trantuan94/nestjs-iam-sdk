@@ -46,6 +46,12 @@ export interface ServiceReadsClient {
   getAccountPermissions(userId: string): Promise<string[] | null>;
   /** `permissions:read` — the project's resource types and their actions. */
   listResourceTypes(query?: ListQuery): Promise<Page<ServiceResourceType>>;
+  /**
+   * `sessions:revoke` — sign an account out everywhere: every session and every device's trust, as an operator's
+   * Revoke Sessions does (the service's ADR-0065). Its status is untouched, so its holder may sign in again. `true`
+   * once ended; `false` for no account of this key's project. Audited by IAM, naming the key.
+   */
+  revokeSessions(userId: string): Promise<boolean>;
 }
 
 // ── shape checks: a 200 that is not the contract is not an answer ───────────
@@ -256,6 +262,13 @@ export class IamServiceClient implements ServiceReadsClient {
       pageOf(isResourceType),
     );
     return toPage(body, toResourceType);
+  }
+
+  async revokeSessions(userId: string): Promise<boolean> {
+    const answer = await sendToIam(this.options, { method: 'POST', path: byId(userId, '/sessions/revoke') });
+    if (answer.status === 204) return true;
+    if (answer.status === 404 && answer.errorBody.code === 'ACCOUNT_NOT_FOUND') return false;
+    throw this.refusal('sessions:revoke', answer);
   }
 
   // ── the one place a status is given its meaning ───────────────────────────

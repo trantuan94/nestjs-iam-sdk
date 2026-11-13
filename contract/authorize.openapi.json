@@ -1,7 +1,7 @@
 {
   "x-source": {
     "document": "nestjs-iam-service/swagger.json",
-    "ref": "9cb33db751065a6121a0f5dff6afbce68c23ccc5"
+    "ref": "b22d37396b9a7fea61eb585f0fca17e6399a3da5"
   },
   "info": {
     "title": "IAM Service",
@@ -564,6 +564,56 @@
           }
         ],
         "summary": "The resource types of the key's project, with their actions",
+        "tags": [
+          "service"
+        ]
+      }
+    },
+    "/service/accounts/{userId}/sessions/revoke": {
+      "post": {
+        "description": "For a service holding an API key granted `sessions:revoke` that sees a compromise: every session of the account ends — its refresh tokens, so every access token too — and every device's trust is cleared, as an operator's Revoke Sessions does. The account's status is untouched, so its holder can sign in again. Audited, naming the key.",
+        "operationId": "serviceRevokeAccountSessions",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Every session ended"
+          },
+          "403": {
+            "description": "The key is not granted `sessions:revoke` (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such account in the key's own project (`ACCOUNT_NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "Sign an account of the key's project out everywhere",
         "tags": [
           "service"
         ]

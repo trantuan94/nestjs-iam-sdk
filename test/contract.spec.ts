@@ -92,12 +92,12 @@ describe('contract with nestjs-iam-service: service reads', () => {
   >;
 
   it.each(SERVICE_ROUTES.map((r) => [r.method.toUpperCase(), r.path, r] as const))(
-    '%s %s exists, keyed by X-API-Key, answering 200',
+    '%s %s exists, keyed by X-API-Key, answering what the client expects',
     (_, path, route) => {
       const operation = paths[path]?.[route.method];
 
       expect(operation).toBeDefined();
-      expect(Object.keys(operation!.responses)).toContain('200');
+      expect(Object.keys(operation!.responses)).toContain(String(route.answers));
       expect(JSON.stringify(operation!.security ?? [])).toContain('X-API-Key');
     },
   );

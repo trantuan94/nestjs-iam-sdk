@@ -36,6 +36,7 @@ const PATHS = {
   '/service/accounts/{userId}/roles': ['get'],
   '/service/accounts/{userId}/permissions': ['get'],
   '/service/resource-types': ['get'],
+  '/service/accounts/{userId}/sessions/revoke': ['post'],
 };
 const paths = Object.fromEntries(
   Object.entries(PATHS).map(([route, methods]) => {

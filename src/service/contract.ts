@@ -14,7 +14,8 @@ export type ServicePermission =
   | 'accounts:read'
   | 'profiles:read'
   | 'roles:read'
-  | 'permissions:read';
+  | 'permissions:read'
+  | 'sessions:revoke';
 
 /** An account as a service sees it: no contact details, no credential. */
 export interface ServiceAccount {
@@ -107,15 +108,22 @@ export const SERVICE_RESPONSE_KEYS = {
   AccountLookupResponseDto: ['accounts'],
 } as const;
 
-/** Each route the client calls, with the permission it needs. */
+/** Each route the client calls, with the permission it needs and what it answers on success. */
 export const SERVICE_ROUTES = [
-  { method: 'post', path: '/service/tokens/introspect', permission: 'tokens:introspect' },
-  { method: 'get', path: '/service/accounts/{userId}', permission: 'accounts:read' },
-  { method: 'post', path: '/service/accounts/lookup', permission: 'accounts:read' },
-  { method: 'post', path: '/service/accounts/contact', permission: 'profiles:read' },
-  { method: 'get', path: '/service/accounts/{userId}/contact', permission: 'profiles:read' },
-  { method: 'get', path: '/service/roles', permission: 'roles:read' },
-  { method: 'get', path: '/service/accounts/{userId}/roles', permission: 'roles:read' },
-  { method: 'get', path: '/service/accounts/{userId}/permissions', permission: 'permissions:read' },
-  { method: 'get', path: '/service/resource-types', permission: 'permissions:read' },
-] as const satisfies readonly { method: string; path: string; permission: ServicePermission }[];
+  { method: 'post', path: '/service/tokens/introspect', permission: 'tokens:introspect', answers: 200 },
+  { method: 'get', path: '/service/accounts/{userId}', permission: 'accounts:read', answers: 200 },
+  { method: 'post', path: '/service/accounts/lookup', permission: 'accounts:read', answers: 200 },
+  { method: 'post', path: '/service/accounts/contact', permission: 'profiles:read', answers: 200 },
+  { method: 'get', path: '/service/accounts/{userId}/contact', permission: 'profiles:read', answers: 200 },
+  { method: 'get', path: '/service/roles', permission: 'roles:read', answers: 200 },
+  { method: 'get', path: '/service/accounts/{userId}/roles', permission: 'roles:read', answers: 200 },
+  { method: 'get', path: '/service/accounts/{userId}/permissions', permission: 'permissions:read', answers: 200 },
+  { method: 'get', path: '/service/resource-types', permission: 'permissions:read', answers: 200 },
+  { method: 'post', path: '/service/accounts/{userId}/sessions/revoke', permission: 'sessions:revoke', answers: 204 },
+] as const satisfies readonly {
+  method: string;
+  path: string;
+  permission: ServicePermission;
+  /** The status the route answers on success: 200 with a body, or 204 for the one write. */
+  answers: 200 | 204;
+}[];

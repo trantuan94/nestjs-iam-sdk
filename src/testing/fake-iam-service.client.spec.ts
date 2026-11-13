@@ -78,6 +78,13 @@ describe('FakeIamServiceClient', () => {
     await expect(fake.introspectToken('other')).resolves.toEqual({ active: false });
   });
 
+  it('signs a known account out, recording it, and answers false for an unknown one', async () => {
+    await expect(fake.revokeSessions('u1')).resolves.toBe(true);
+    await expect(fake.revokeSessions('nobody')).resolves.toBe(false);
+
+    expect(fake.revokedSessions).toEqual(['u1']);
+  });
+
   it('refuses a call the fake key is not granted, naming the permission', async () => {
     fake.setData({ ...DATA, permissions: ['accounts:read'] });
 
