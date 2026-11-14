@@ -344,4 +344,77 @@ describe('IamServiceClient', () => {
       expect(found.map((a) => a.identifier)).toEqual(['user-0', 'user-100', 'user-200']);
     });
   });
+
+  describe('syncResourceTypes', () => {
+    const PRODUCTS = { code: 'products', name: 'Products', allowedActions: ['read', 'create'] };
+    const RESULT = {
+      code: 'products',
+      outcome: 'created',
+      addedActions: ['read', 'create'],
+      removedActions: [],
+      undeclaredActions: [],
+      fieldsChanged: [],
+    };
+
+    it('PUTs the manifest, without prune or dryRun unless asked, and answers the results', async () => {
+      answer(200, { dryRun: false, prune: false, results: [RESULT] });
+
+      await expect(client.syncResourceTypes([PRODUCTS])).resolves.toEqual({
+        dryRun: false,
+        prune: false,
+        results: [RESULT],
+      });
+      expect(iam.calls[0]).toMatchObject({
+        method: 'PUT',
+        path: '/api/iam/service/resource-types',
+        body: { resourceTypes: [PRODUCTS] },
+      });
+      expect(iam.calls[0]!.headers['x-api-key']).toBe('iam_secret_value');
+    });
+
+    it('sends prune in the body and dryRun in the query', async () => {
+      answer(200, { dryRun: true, prune: true, results: [] });
+
+      await client.syncResourceTypes([], { prune: true, dryRun: true });
+
+      expect(iam.calls[0]).toMatchObject({
+        path: '/api/iam/service/resource-types?dryRun=true',
+        body: { resourceTypes: [], prune: true },
+      });
+    });
+
+    it('names resource-types:sync when the key is not granted it', async () => {
+      answer(403, iamError(403, 'API_KEY_PERMISSION_DENIED', 'x'));
+
+      const failure = client.syncResourceTypes([PRODUCTS]);
+
+      await expect(failure).rejects.toBeInstanceOf(IamPermissionDeniedError);
+      await expect(failure).rejects.toMatchObject({ permission: 'resource-types:sync' });
+    });
+
+    it.each<[string, unknown]>([
+      ['no results', { dryRun: false, prune: false }],
+      ['an outcome it does not know', { dryRun: false, prune: false, results: [{ ...RESULT, outcome: 'merged' }] }],
+      ['a field it does not know', { dryRun: false, prune: false, results: [{ ...RESULT, fieldsChanged: ['code'] }] }],
+    ])('does not take a 200 with %s for an answer', async (_, body) => {
+      answer(200, body);
+
+      await expect(client.syncResourceTypes([PRODUCTS])).rejects.toBeInstanceOf(IamUnavailableError);
+    });
+
+    it('answers a refused manifest (400) as misconfiguration, and a 503 as unavailable', async () => {
+      answer(400, iamError(400, 'VALIDATION_EXCEPTION', 'code is reserved by the platform'));
+      await expect(client.syncResourceTypes([PRODUCTS])).rejects.toBeInstanceOf(IamMisconfigurationError);
+
+      answer(503, iamError(503, 'X', 'x'));
+      await expect(client.syncResourceTypes([PRODUCTS])).rejects.toBeInstanceOf(IamUnavailableError);
+    });
+
+    it('refuses more than 100 types before sending anything', async () => {
+      const many = Array.from({ length: 101 }, (_, i) => ({ ...PRODUCTS, code: `t${i}` }));
+
+      await expect(client.syncResourceTypes(many)).rejects.toBeInstanceOf(RangeError);
+      expect(iam.calls).toHaveLength(0);
+    });
+  });
 });

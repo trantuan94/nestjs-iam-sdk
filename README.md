@@ -219,6 +219,11 @@ Enforce with `@Authorize` or `@Authz()`.
 `applyAccessControlToSwagger` is idempotent, and harmless in an app without `@nestjs/swagger`.
 It does not need `IamAuthzModule` to be imported.
 
+To document what a route ENFORCES rather than declare it a second time, read its `@Authorize`
+requirements back with `authorizationRequirementsOf(handler)` — `{ action, resourceType }[]`, the
+type `undefined` when it is resolved from the request. A service rendering its own endpoint
+policy, or a spec checking that every action is one it declares to IAM, needs nothing else.
+
 ## What the client sees
 
 | Situation | Default answer |
@@ -279,7 +284,8 @@ needs one permission granted to the key:
 | `getAccountRoles(userId)` | `roles:read` | `{ id, code, name }[]` or `null` |
 | `getAccountPermissions(userId)` | `permissions:read` | the codes held, sorted, or `null` |
 | `listResourceTypes({ page, limit, searchKey })` | `permissions:read` | a page of `{ id, code, name, description, allowedActions }` |
-| `revokeSessions(userId)` | `sessions:revoke` | `true` once every session and device trust is ended, as an operator's Revoke Sessions; `false` for no such account. The one write. Audited by IAM |
+| `revokeSessions(userId)` | `sessions:revoke` | `true` once every session and device trust is ended, as an operator's Revoke Sessions; `false` for no such account. Audited by IAM |
+| `syncResourceTypes(types, { prune, dryRun })` | `resource-types:sync` | `{ dryRun, prune, results }`, one result per type: `created`, `updated`, `unchanged`, `undeclared` (IAM has it, the manifest does not), and with `prune` also `deleted` / `delete-refused`. At most 100 types. Audited by IAM |
 
 ```ts
 @Injectable()
@@ -293,6 +299,25 @@ export class InvitationsService {
   }
 }
 ```
+
+### Declaring the project's resource types
+
+A resource service can keep IAM's resource types in step with what it serves — at boot, say —
+instead of an operator typing them in (nestjs-iam-service's ADR-0066). Each action derives the
+permission code `${code}:${action}`, which grants nothing until an operator puts it in a role:
+
+```ts
+const { results } = await this.iam.syncResourceTypes([
+  { code: 'invoices', name: 'Invoices', allowedActions: ['read', 'create', 'approve'] },
+]);
+```
+
+Without `prune` nothing is taken away: an action or a type IAM has beyond the manifest is
+reported (`undeclaredActions`, `undeclared`), never removed. With `prune: true` undeclared
+actions are narrowed away — their grants stripped from every role — and undeclared types deleted
+unless a role holds one. The sync is not atomic: each type is written on its own, and sending the
+same manifest again finishes one that failed part way. `dryRun: true` answers the same results
+and writes nothing.
 
 `null` means *no account of this key's project* — unknown, or another project's, alike. Every
 other failure throws, by class:
@@ -349,7 +374,9 @@ The real guard and decorators run; only IAM is replaced. The first matching rule
 `allow('*')` matches any action, and anything no rule allows is denied.
 
 `IamServiceClient` is replaced by `FakeIamServiceClient`, which answers from what you give it,
-as IAM would — identifiers ignoring case, an unknown id `null`, a blocked account no address:
+as IAM would — identifiers ignoring case, an unknown id `null`, a blocked account no address.
+`syncResourceTypes` applies a manifest to its resource types as IAM does without `prune`, and
+records each one in `syncedResourceTypes`:
 
 ```ts
 IamAuthzTestingModule.forRoot({
@@ -366,12 +393,14 @@ moduleRef.get(FakeIamServiceClient).failWith('unavailable', 1);
 
 ## Compatibility
 
-The request and response types — `/auth/authorize` and every `/service/*` read — are checked
+The request and response types — `/auth/authorize` and every `/service/*` route — are checked
 against a snapshot of nestjs-iam-service's OpenAPI document (`contract/authorize.openapi.json`,
 refreshed with `npm run contract:update`). The snapshot records the service revision it was
 taken from. `IamServiceClient` needs a service with the `/service/*` reads and their
 `ACCOUNT_NOT_FOUND` code; against an older one, every by-id read throws
-`IamMisconfigurationError` rather than answering `null`.
+`IamMisconfigurationError` rather than answering `null`. `syncResourceTypes` needs
+one with `PUT /service/resource-types` (its ADR-0066); against an older one it throws
+`IamMisconfigurationError`.
 
 Nest 10 and 11 are tested on Node 20, 22 and 24; Nest 12 on Node 24, where the test runner
 can load ESM through `require`.

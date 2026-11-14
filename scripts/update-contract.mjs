@@ -2,7 +2,7 @@
 /**
  * Refreshes contract/authorize.openapi.json from nestjs-iam-service's committed
  * swagger.json — the parts of it this SDK depends on, and nothing else:
- * `/auth/authorize` and the `/service/*` reads `IamServiceClient` calls.
+ * `/auth/authorize` and the `/service/*` routes `IamServiceClient` calls.
  *
  *   npm run contract:update                       # ../nestjs-iam-service/swagger.json
  *   npm run contract:update -- path/to/swagger.json
@@ -35,7 +35,7 @@ const PATHS = {
   '/service/roles': ['get'],
   '/service/accounts/{userId}/roles': ['get'],
   '/service/accounts/{userId}/permissions': ['get'],
-  '/service/resource-types': ['get'],
+  '/service/resource-types': ['get', 'put'],
   '/service/accounts/{userId}/sessions/revoke': ['post'],
 };
 const paths = Object.fromEntries(
@@ -65,6 +65,11 @@ const SCHEMAS = [
   'AccountPermissionsResponseDto',
   'ServiceResourceTypeResponseDto',
   'ServiceResourceTypeListResponseDto',
+  'SyncResourceTypesDto',
+  'ResourceTypeDeclarationDto',
+  'SyncResourceTypesResponseDto',
+  'ResourceTypeSyncResultDto',
+  'ResourceTypeSyncOutcome',
 ];
 const schemas = Object.fromEntries(
   SCHEMAS.map((name) => {

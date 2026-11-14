@@ -3,7 +3,7 @@ import { IamUnavailableError } from '../client/errors';
 import type { ResolvedIamAuthzOptions } from '../options';
 
 export interface IamCall {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT';
   /** Under `baseUrl`, starting with `/`. */
   path: string;
   /** Sent as JSON. */

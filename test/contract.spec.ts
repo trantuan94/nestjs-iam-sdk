@@ -6,6 +6,10 @@ import {
 } from '../src/client/contract';
 import {
   ACCOUNT_LOOKUP_MAX,
+  RESOURCE_TYPE_DECLARATION_KEYS,
+  RESOURCE_TYPE_DECLARATION_REQUIRED,
+  RESOURCE_TYPE_SYNC_MAX,
+  RESOURCE_TYPE_SYNC_OUTCOMES,
   SERVICE_RESPONSE_KEYS,
   SERVICE_ROUTES,
 } from '../src/service/contract';
@@ -21,6 +25,7 @@ import {
 interface Schema {
   type?: string;
   properties?: Record<string, { type?: string; maxItems?: number; nullable?: boolean }>;
+  enum?: string[];
   required?: string[];
 }
 
@@ -120,5 +125,29 @@ describe('contract with nestjs-iam-service: service reads', () => {
 
   it('caps a lookup at the size the client batches by', () => {
     expect(schemas['AccountLookupRequestDto']?.properties?.['identifiers']?.maxItems).toBe(ACCOUNT_LOOKUP_MAX);
+  });
+});
+
+describe('contract with nestjs-iam-service: resource type sync', () => {
+  it('declares a type with exactly the fields the service takes, requiring the same ones', () => {
+    const declaration = schemas['ResourceTypeDeclarationDto'];
+
+    expect(Object.keys(declaration?.properties ?? {}).sort()).toEqual([...RESOURCE_TYPE_DECLARATION_KEYS].sort());
+    expect([...(declaration?.required ?? [])].sort()).toEqual([...RESOURCE_TYPE_DECLARATION_REQUIRED].sort());
+  });
+
+  it('sends a manifest and prune, the manifest required', () => {
+    expect(Object.keys(schemas['SyncResourceTypesDto']?.properties ?? {}).sort()).toEqual(['prune', 'resourceTypes']);
+    expect(schemas['SyncResourceTypesDto']?.required).toEqual(['resourceTypes']);
+  });
+
+  it('caps a manifest at the size the client refuses beyond', () => {
+    expect(schemas['SyncResourceTypesDto']?.properties?.['resourceTypes']?.maxItems).toBe(RESOURCE_TYPE_SYNC_MAX);
+  });
+
+  it('knows every outcome the service answers, and no other', () => {
+    expect([...(schemas['ResourceTypeSyncOutcome']?.enum ?? [])].sort()).toEqual(
+      [...RESOURCE_TYPE_SYNC_OUTCOMES].sort(),
+    );
   });
 });

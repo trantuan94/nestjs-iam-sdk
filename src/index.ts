@@ -8,6 +8,7 @@ export {
 } from './options';
 
 export { Authorize } from './guard/authorize.decorator';
+export { authorizationRequirementsOf, type AuthorizationRequirement } from './guard/metadata';
 export { SkipAuthorize } from './guard/skip-authorize.decorator';
 export {
   AccessControl,
@@ -51,6 +52,13 @@ export type {
 export { IamServiceClient, type ServiceReadsClient } from './service/iam-service.client';
 export {
   ACCOUNT_LOOKUP_MAX,
+  RESOURCE_TYPE_SYNC_MAX,
+  type ResourceAttributeDefinition,
+  type ResourceTypeDeclaration,
+  type ResourceTypeSync,
+  type ResourceTypeSyncOptions,
+  type ResourceTypeSyncOutcome,
+  type ResourceTypeSyncResult,
   type ServicePermission,
   type ServiceAccount,
   type AccountContact,

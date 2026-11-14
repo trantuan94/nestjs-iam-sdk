@@ -10,6 +10,12 @@ import {
   ACCOUNT_LOOKUP_MAX,
   type AccountContact,
   type ListQuery,
+  RESOURCE_TYPE_SYNC_MAX,
+  RESOURCE_TYPE_SYNC_OUTCOMES,
+  type ResourceTypeDeclaration,
+  type ResourceTypeSync,
+  type ResourceTypeSyncOptions,
+  type ResourceTypeSyncResult,
   type Page,
   type ServiceAccount,
   type ServicePermission,
@@ -52,6 +58,16 @@ export interface ServiceReadsClient {
    * once ended; `false` for no account of this key's project. Audited by IAM, naming the key.
    */
   revokeSessions(userId: string): Promise<boolean>;
+  /**
+   * `resource-types:sync` — declare the project's resource types, typically at boot (the service's ADR-0066):
+   * types the project lacks are created, missing actions added, name / description / attributes set. Without
+   * `prune` nothing is taken away; what IAM has beyond the manifest is reported. Not atomic — sending the same
+   * manifest again finishes a sync that failed part way. Each change is audited by IAM, naming the key.
+   */
+  syncResourceTypes(
+    resourceTypes: readonly ResourceTypeDeclaration[],
+    options?: ResourceTypeSyncOptions,
+  ): Promise<ResourceTypeSync>;
 }
 
 // ── shape checks: a 200 that is not the contract is not an answer ───────────
@@ -101,6 +117,23 @@ const isResourceType: Guard<ServiceResourceType> = (v): v is ServiceResourceType
   isNullableString(v.description) &&
   isStringArray(v.allowedActions);
 
+const SYNC_OUTCOMES: readonly string[] = RESOURCE_TYPE_SYNC_OUTCOMES;
+const SYNC_FIELDS: readonly string[] = ['name', 'description', 'attributes'] satisfies ResourceTypeSyncResult['fieldsChanged'];
+
+const isSyncResult: Guard<ResourceTypeSyncResult> = (v): v is ResourceTypeSyncResult =>
+  isObject(v) &&
+  typeof v.code === 'string' &&
+  typeof v.outcome === 'string' &&
+  SYNC_OUTCOMES.includes(v.outcome) &&
+  isStringArray(v.addedActions) &&
+  isStringArray(v.removedActions) &&
+  isStringArray(v.undeclaredActions) &&
+  isStringArray(v.fieldsChanged) &&
+  v.fieldsChanged.every((f) => SYNC_FIELDS.includes(f));
+
+const isSync: Guard<ResourceTypeSync> = (v): v is ResourceTypeSync =>
+  isObject(v) && typeof v.dryRun === 'boolean' && typeof v.prune === 'boolean' && arrayOf(isSyncResult)(v.results);
+
 const pageOf =
   <T>(guard: Guard<T>): Guard<Page<T>> =>
   (v): v is Page<T> =>
@@ -139,6 +172,19 @@ const toResourceType = (t: ServiceResourceType): ServiceResourceType => ({
   name: t.name,
   description: t.description,
   allowedActions: [...t.allowedActions],
+});
+const toSyncResult = (r: ResourceTypeSyncResult): ResourceTypeSyncResult => ({
+  code: r.code,
+  outcome: r.outcome,
+  addedActions: [...r.addedActions],
+  removedActions: [...r.removedActions],
+  undeclaredActions: [...r.undeclaredActions],
+  fieldsChanged: [...r.fieldsChanged],
+});
+const toSync = (s: ResourceTypeSync): ResourceTypeSync => ({
+  dryRun: s.dryRun,
+  prune: s.prune,
+  results: s.results.map(toSyncResult),
 });
 const toPage = <T>(page: Page<T>, map: (item: T) => T): Page<T> => ({
   data: page.data.map(map),
@@ -269,6 +315,28 @@ export class IamServiceClient implements ServiceReadsClient {
     if (answer.status === 204) return true;
     if (answer.status === 404 && answer.errorBody.code === 'ACCOUNT_NOT_FOUND') return false;
     throw this.refusal('sessions:revoke', answer);
+  }
+
+  async syncResourceTypes(
+    resourceTypes: readonly ResourceTypeDeclaration[],
+    options: ResourceTypeSyncOptions = {},
+  ): Promise<ResourceTypeSync> {
+    // IAM refuses a longer manifest whole; one sync cannot be split, since each part would report the other's
+    // types as undeclared (and, with prune, delete them).
+    if (resourceTypes.length > RESOURCE_TYPE_SYNC_MAX) {
+      throw new RangeError(`A sync declares at most ${RESOURCE_TYPE_SYNC_MAX} resource types`);
+    }
+    const body = await this.read(
+      'resource-types:sync',
+      {
+        method: 'PUT',
+        path: '/service/resource-types',
+        query: { dryRun: options.dryRun ? 'true' : undefined },
+        body: { resourceTypes, ...(options.prune ? { prune: true } : {}) },
+      },
+      isSync,
+    );
+    return toSync(body);
   }
 
   // ── the one place a status is given its meaning ───────────────────────────
