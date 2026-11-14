@@ -1,7 +1,7 @@
 {
   "x-source": {
     "document": "nestjs-iam-service/swagger.json",
-    "ref": "b22d37396b9a7fea61eb585f0fca17e6399a3da5"
+    "ref": "00bf159c2670260fc80e1466736903ceedb15f1c"
   },
   "info": {
     "title": "IAM Service",
@@ -567,6 +567,73 @@
         "tags": [
           "service"
         ]
+      },
+      "put": {
+        "description": "For a resource service holding an API key granted `resource-types:sync`, typically at deploy or boot: every type it serves, with its actions. Types the project lacks are created, missing actions added, `name` / `description` / `attributes` set to the declaration. Without `prune`, nothing is taken away — what the project has beyond the manifest is reported (`undeclared`, `undeclaredActions`). With `prune`, undeclared actions are narrowed away — their grants stripped from every role — and undeclared types deleted, unless a role holds one (`delete-refused`). The derived permission codes grant nothing until an operator puts them in a role. Not atomic: each type is written on its own, and sending the same manifest again finishes a sync that failed part way. `?dryRun=true` answers the same results and writes nothing. Each change is audited, naming the key.",
+        "operationId": "serviceSyncResourceTypes",
+        "parameters": [
+          {
+            "name": "dryRun",
+            "required": false,
+            "in": "query",
+            "description": "Answer what the sync would do, writing nothing — for a CI check before a deploy.",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncResourceTypesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "What was done to each type (or would be, under `dryRun`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResourceTypesResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The manifest is malformed — a code declared twice or reserved by the platform included — and nothing was written (`VALIDATION_EXCEPTION`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key is not granted `resource-types:sync` (`API_KEY_PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-API-Key": []
+          }
+        ],
+        "summary": "Declare the resource types of the key's project",
+        "tags": [
+          "service"
+        ]
       }
     },
     "/service/accounts/{userId}/sessions/revoke": {
@@ -1075,6 +1142,198 @@
           "hasPrev",
           "data"
         ]
+      },
+      "SyncResourceTypesDto": {
+        "type": "object",
+        "properties": {
+          "resourceTypes": {
+            "maxItems": 100,
+            "description": "Every type the service serves. Empty is allowed: with `prune`, it removes every type of the project that no role holds.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceTypeDeclarationDto"
+            }
+          },
+          "prune": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also take away what the manifest does not declare: actions are narrowed (their grants stripped from every role, their policies retired) and types deleted — a type a role still holds is kept and reported `delete-refused`. Off, the sync only adds."
+          }
+        },
+        "required": [
+          "resourceTypes"
+        ]
+      },
+      "ResourceTypeDeclarationDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "products",
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "example": "Products",
+            "maxLength": 150
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255,
+            "description": "Absent keeps the stored description; `null` clears it."
+          },
+          "allowedActions": {
+            "example": [
+              "read",
+              "create",
+              "update"
+            ],
+            "description": "The actions the type carries. Without `prune`, actions IAM has that are not listed are kept and reported as `undeclaredActions`.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "string",
+                    "number",
+                    "boolean",
+                    "date",
+                    "array",
+                    "object"
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "example": {
+              "status": {
+                "type": "string",
+                "required": true
+              },
+              "customerId": {
+                "type": "string",
+                "required": true
+              },
+              "amount": {
+                "type": "number",
+                "required": false
+              }
+            },
+            "description": "Custom attribute schema: map of attribute name → { type, required? }. Absent keeps the stored map; present replaces it whole."
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "allowedActions"
+        ]
+      },
+      "SyncResourceTypesResponseDto": {
+        "type": "object",
+        "properties": {
+          "dryRun": {
+            "type": "boolean",
+            "description": "True when nothing was written"
+          },
+          "prune": {
+            "type": "boolean"
+          },
+          "results": {
+            "description": "One per type: the manifest's in its order, then every type it does not declare, by code.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceTypeSyncResultDto"
+            }
+          }
+        },
+        "required": [
+          "dryRun",
+          "prune",
+          "results"
+        ]
+      },
+      "ResourceTypeSyncResultDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "products"
+          },
+          "outcome": {
+            "description": "`undeclared`: IAM has the type, the manifest does not, and `prune` is off. `delete-refused`: `prune` is on but a role holds one of its codes.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceTypeSyncOutcome"
+              }
+            ]
+          },
+          "addedActions": {
+            "description": "Actions the type carries now that it did not",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "removedActions": {
+            "description": "Actions taken away — only with `prune`, or by a delete",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "undeclaredActions": {
+            "description": "Actions the type carries that the manifest does not name, kept because `prune` is off",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "fieldsChanged": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "name",
+                "description",
+                "attributes"
+              ]
+            }
+          }
+        },
+        "required": [
+          "code",
+          "outcome",
+          "addedActions",
+          "removedActions",
+          "undeclaredActions",
+          "fieldsChanged"
+        ]
+      },
+      "ResourceTypeSyncOutcome": {
+        "type": "string",
+        "enum": [
+          "created",
+          "updated",
+          "unchanged",
+          "deleted",
+          "delete-refused",
+          "undeclared"
+        ],
+        "description": "`undeclared`: IAM has the type, the manifest does not, and `prune` is off. `delete-refused`: `prune` is on but a role holds one of its codes."
       }
     }
   }

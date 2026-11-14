@@ -5,7 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { IamAuthzTestingModule } from '../testing';
 import { Authorize } from './authorize.decorator';
 import { IamAuthzGuard } from './iam-authz.guard';
-import { AUTHORIZE_METADATA, type AuthorizeRequirement } from './metadata';
+import { AUTHORIZE_METADATA, authorizationRequirementsOf, type AuthorizeRequirement } from './metadata';
 import { fromParam } from './resolvers';
 
 class Invoices {
@@ -22,6 +22,15 @@ describe('@Authorize', () => {
     const requirements = Reflect.getMetadata(AUTHORIZE_METADATA, Invoices.prototype.send) as AuthorizeRequirement[];
 
     expect(requirements.map((r) => r.action)).toEqual(['invoices:read', 'emails:send']);
+  });
+
+  it('reads back the requirements for docs: the action, and the type when it is a literal', () => {
+    expect(authorizationRequirementsOf(Invoices.prototype.send)).toEqual([
+      { action: 'invoices:read', resourceType: 'invoices' },
+      { action: 'emails:send', resourceType: 'emails' },
+    ]);
+    expect(authorizationRequirementsOf(() => undefined)).toEqual([]);
+    expect(authorizationRequirementsOf(undefined)).toEqual([]);
   });
 
   it('attaches the guard once, however many requirements there are', () => {

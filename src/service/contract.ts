@@ -15,7 +15,8 @@ export type ServicePermission =
   | 'profiles:read'
   | 'roles:read'
   | 'permissions:read'
-  | 'sessions:revoke';
+  | 'sessions:revoke'
+  | 'resource-types:sync';
 
 /** An account as a service sees it: no contact details, no credential. */
 export interface ServiceAccount {
@@ -70,6 +71,75 @@ export interface ServiceResourceType {
   allowedActions: string[];
 }
 
+/** A custom attribute of a resource type, for ABAC conditions. */
+export interface ResourceAttributeDefinition {
+  type: 'string' | 'number' | 'boolean' | 'string[]';
+  /** Default `false`. */
+  required?: boolean;
+}
+
+/**
+ * One resource type as the service serves it, for `syncResourceTypes`. `allowedActions` is the whole set; each
+ * action derives the permission code `${code}:${action}`, which grants nothing until an operator puts it in a role.
+ */
+export interface ResourceTypeDeclaration {
+  /** Lowercase alphanumeric with `-` / `_`; not one the platform reserves (`users`, `master`, …). */
+  code: string;
+  name: string;
+  /** Absent keeps the stored description; `null` clears it. */
+  description?: string | null;
+  allowedActions: string[];
+  /** Absent keeps the stored map; present replaces it whole. */
+  attributes?: Record<string, ResourceAttributeDefinition>;
+}
+
+/**
+ * What a sync did to one type. `undeclared`: IAM has it and the manifest does not, with `prune` off.
+ * `delete-refused`: `prune` is on but a role holds one of its codes.
+ */
+export type ResourceTypeSyncOutcome = 'created' | 'updated' | 'unchanged' | 'deleted' | 'delete-refused' | 'undeclared';
+
+export interface ResourceTypeSyncResult {
+  code: string;
+  outcome: ResourceTypeSyncOutcome;
+  addedActions: string[];
+  /** Only with `prune`, or by a delete. */
+  removedActions: string[];
+  /** Carried by IAM, not named by the manifest, kept because `prune` is off. */
+  undeclaredActions: string[];
+  fieldsChanged: ('name' | 'description' | 'attributes')[];
+}
+
+export interface ResourceTypeSync {
+  /** True when nothing was written. */
+  dryRun: boolean;
+  prune: boolean;
+  /** The manifest's types in its order, then every type it does not declare, by code. */
+  results: ResourceTypeSyncResult[];
+}
+
+export interface ResourceTypeSyncOptions {
+  /** Also narrow undeclared actions away and delete undeclared types. Default `false`: only adds. */
+  prune?: boolean;
+  /** Answer what the sync would do, writing nothing. Default `false`. */
+  dryRun?: boolean;
+}
+
+/** The fields of a declaration, and the ones IAM requires; `test/contract.spec.ts` compares them with the snapshot. */
+export const RESOURCE_TYPE_DECLARATION_KEYS = ['code', 'name', 'description', 'allowedActions', 'attributes'] as const;
+export const RESOURCE_TYPE_DECLARATION_REQUIRED = ['code', 'name', 'allowedActions'] as const;
+export const RESOURCE_TYPE_SYNC_OUTCOMES = [
+  'created',
+  'updated',
+  'unchanged',
+  'deleted',
+  'delete-refused',
+  'undeclared',
+] as const satisfies readonly ResourceTypeSyncOutcome[];
+
+/** The most types one sync may declare. */
+export const RESOURCE_TYPE_SYNC_MAX = 100;
+
 /** One page of a listing. */
 export interface Page<T> {
   data: T[];
@@ -106,6 +176,8 @@ export const SERVICE_RESPONSE_KEYS = {
   AccountPermissionsResponseDto: ['permissions'],
   AccountRolesResponseDto: ['roles'],
   AccountLookupResponseDto: ['accounts'],
+  SyncResourceTypesResponseDto: ['dryRun', 'prune', 'results'],
+  ResourceTypeSyncResultDto: ['code', 'outcome', 'addedActions', 'removedActions', 'undeclaredActions', 'fieldsChanged'],
 } as const;
 
 /** Each route the client calls, with the permission it needs and what it answers on success. */
@@ -120,10 +192,11 @@ export const SERVICE_ROUTES = [
   { method: 'get', path: '/service/accounts/{userId}/permissions', permission: 'permissions:read', answers: 200 },
   { method: 'get', path: '/service/resource-types', permission: 'permissions:read', answers: 200 },
   { method: 'post', path: '/service/accounts/{userId}/sessions/revoke', permission: 'sessions:revoke', answers: 204 },
+  { method: 'put', path: '/service/resource-types', permission: 'resource-types:sync', answers: 200 },
 ] as const satisfies readonly {
   method: string;
   path: string;
   permission: ServicePermission;
-  /** The status the route answers on success: 200 with a body, or 204 for the one write. */
+  /** The status the route answers on success: 200 with a body, or 204 for a write that answers none. */
   answers: 200 | 204;
 }[];

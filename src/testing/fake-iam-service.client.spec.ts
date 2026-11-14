@@ -85,6 +85,65 @@ describe('FakeIamServiceClient', () => {
     expect(fake.revokedSessions).toEqual(['u1']);
   });
 
+  describe('syncResourceTypes', () => {
+    const ORDERS = { code: 'orders', name: 'Orders', allowedActions: ['read'] };
+
+    it('creates, then adds actions, then reports nothing to do — and lists the result', async () => {
+      await expect(fake.syncResourceTypes([ORDERS])).resolves.toMatchObject({
+        results: [{ code: 'orders', outcome: 'created', addedActions: ['read'] }],
+      });
+      await expect(fake.syncResourceTypes([{ ...ORDERS, allowedActions: ['read', 'create'] }])).resolves.toMatchObject({
+        results: [{ outcome: 'updated', addedActions: ['create'] }],
+      });
+      await expect(fake.syncResourceTypes([{ ...ORDERS, allowedActions: ['create'] }])).resolves.toMatchObject({
+        results: [{ outcome: 'unchanged', undeclaredActions: ['read'] }],
+      });
+
+      expect(fake.syncedResourceTypes).toHaveLength(3);
+      await expect(fake.listResourceTypes()).resolves.toMatchObject({
+        data: [{ code: 'orders', allowedActions: ['read', 'create'] }],
+      });
+    });
+
+    it('reports a type the manifest leaves out as undeclared, and keeps it', async () => {
+      fake.setData({
+        resourceTypes: [{ id: 't', code: 'stale', name: 'Stale', description: null, allowedActions: ['x'] }],
+      });
+
+      await expect(fake.syncResourceTypes([], { prune: true })).resolves.toEqual({
+        dryRun: false,
+        prune: true,
+        results: [
+          {
+            code: 'stale',
+            outcome: 'undeclared',
+            addedActions: [],
+            removedActions: [],
+            undeclaredActions: ['x'],
+            fieldsChanged: [],
+          },
+        ],
+      });
+      await expect(fake.listResourceTypes()).resolves.toMatchObject({ total: 1 });
+    });
+
+    it('a dry run answers the same and changes nothing', async () => {
+      await expect(fake.syncResourceTypes([ORDERS], { dryRun: true })).resolves.toMatchObject({
+        dryRun: true,
+        results: [{ outcome: 'created' }],
+      });
+
+      expect(fake.syncedResourceTypes).toEqual([]);
+      await expect(fake.listResourceTypes()).resolves.toMatchObject({ total: 0 });
+    });
+
+    it('needs resource-types:sync', async () => {
+      fake.setData({ permissions: ['permissions:read'] });
+
+      await expect(fake.syncResourceTypes([ORDERS])).rejects.toMatchObject({ permission: 'resource-types:sync' });
+    });
+  });
+
   it('refuses a call the fake key is not granted, naming the permission', async () => {
     fake.setData({ ...DATA, permissions: ['accounts:read'] });
 
