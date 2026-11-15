@@ -49,8 +49,8 @@ describe('InMemoryDecisionCache', () => {
 
 describe('decision key', () => {
   it('does not depend on attribute order', () => {
-    const a = decisionKey({ token: 't', action: 'a:b', resource: { type: 'a', id: '1', x: { p: 1, q: 2 } } });
-    const b = decisionKey({ resource: { x: { q: 2, p: 1 }, id: '1', type: 'a' }, action: 'a:b', token: 't' });
+    const a = decisionKey({ token: 't', action: 'a:b', resource: { type: 'a', id: '1', attributes: { x: { p: 1, q: 2 } } } });
+    const b = decisionKey({ resource: { attributes: { x: { q: 2, p: 1 } }, id: '1', type: 'a' }, action: 'a:b', token: 't' });
 
     expect(a).toBe(b);
   });

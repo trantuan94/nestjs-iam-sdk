@@ -30,7 +30,7 @@ export class InvoicesController {
   }
 
   @Post()
-  @Authorize('invoices:create', { type: 'invoices', amount: fromBody('amount') })
+  @Authorize('invoices:create', { type: 'invoices', attributes: { amount: fromBody('amount') } })
   create(@Body() body: { amount: number }) {
     return { created: true, amount: body.amount };
   }
@@ -53,7 +53,8 @@ export class InvoicesController {
       id,
       namespaceId: invoice?.namespaceId,
       ownerId: invoice?.createdBy,
-      amount: invoice?.amount,
+      // The invoice's own data: policies read it as resource.attributes.amount
+      attributes: { amount: invoice?.amount },
     });
     return { approved: id, by: decision.userId };
   }

@@ -48,6 +48,7 @@ export type {
   AuthorizeResource,
   AuthorizeEnvironment,
 } from './client/contract';
+export { AUTHORIZE_RESOURCE_KEYS } from './client/contract';
 
 export { IamServiceClient, type ServiceReadsClient } from './service/iam-service.client';
 export {

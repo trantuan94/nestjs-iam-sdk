@@ -7,21 +7,30 @@
  */
 
 /**
- * The resource acted on. Only `type` is required by the service; every other
- * attribute is handed to ABAC as `resource.<name>`.
+ * The resource acted on (the service's ADR-0068): the platform's keys at the
+ * top, the object's own data under `attributes`, which ABAC reads as
+ * `resource.attributes.<name>`. Any other key — `projectId` included, which the
+ * service sets from the resource type — is refused with a 400.
  */
 export interface AuthorizeResource {
   /** A registered resource type code, owned by the user's namespace (or a platform type). */
   type: string;
+  /** The object's identifier: conditions read it as `resource.id`, and an ABAC denial records it. */
   id?: string;
   /**
-   * The IAM namespace id the RECORD belongs to. When present and different
-   * from the token holder's namespace, the answer is `allowed: false` — the
-   * service's tenant-isolation gate. Send it whenever you know it.
+   * The IAM namespace id the RECORD belongs to — a claim the service checks:
+   * when present and different from the token holder's namespace, the answer
+   * is `allowed: false` (its tenant-isolation gate). Send it whenever you know it.
    */
   namespaceId?: string;
-  [attribute: string]: unknown;
+  /** The object's owner (`resource.ownerId`). */
+  ownerId?: string;
+  /** The object's own data, apart from the keys above so the two cannot collide — a field named `type` here is the object's. */
+  attributes?: Record<string, unknown>;
 }
+
+/** The keys a resource may have; `test/contract.spec.ts` compares them with the service's `AuthorizeResourceDto`. */
+export const AUTHORIZE_RESOURCE_KEYS = ['type', 'id', 'namespaceId', 'ownerId', 'attributes'] as const;
 
 /** Extra ABAC context, read by conditions as `env.<name>`. */
 export interface AuthorizeEnvironment {

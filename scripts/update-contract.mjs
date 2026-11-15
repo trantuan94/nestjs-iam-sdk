@@ -50,6 +50,7 @@ const paths = Object.fromEntries(
 
 const SCHEMAS = [
   'AuthorizeRequestDto',
+  'AuthorizeResourceDto',
   'AuthorizeResponseDto',
   'ErrorResponseDto',
   'TokenIntrospectionRequestDto',

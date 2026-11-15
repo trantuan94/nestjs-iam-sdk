@@ -83,8 +83,12 @@ boot, not the first request.
 
 ## Authorizing a route — `@Authorize(action, resource)`
 
-`action` is the **full permission code**, `<resourceType>:<action>`. `resource` needs a `type`.
-Every other attribute is passed to IAM's ABAC policies as `resource.<name>`.
+`action` is the **full permission code**, `<resourceType>:<action>`. `resource` needs a `type`,
+and may name the object (`id`), the namespace it lives in (`namespaceId` — a claim IAM checks)
+and its owner (`ownerId`). **The object's own data goes under `attributes`**, which IAM's ABAC
+policies read as `resource.attributes.<name>` — kept apart from the keys above, so an object field
+named `type` stays the object's (nestjs-iam-service's ADR-0068). Any other key is refused when the
+decorator is applied, and `projectId` is IAM's to set.
 
 ```ts
 import { Authorize, fromBody, fromHeader, fromParam } from '@trantuan94/nestjs-iam-sdk';
@@ -100,7 +104,7 @@ export class InvoicesController {
   findOne() {}
 
   @Post()
-  @Authorize('invoices:create', { type: 'invoices', amount: fromBody('amount') })
+  @Authorize('invoices:create', { type: 'invoices', attributes: { amount: fromBody('amount') } })
   create() {}
 
   // Several are ANDed, and asked in parallel.
@@ -151,7 +155,7 @@ async approve(@Param('id') id: string, @Authz() authz: BoundAuthz) {
     id,
     namespaceId: invoice.namespaceId,
     ownerId: invoice.createdBy,
-    amount: invoice.amount,
+    attributes: { amount: invoice.amount },
   });
   // …
 }
@@ -368,6 +372,7 @@ const moduleRef = await Test.createTestingModule({
 const iam = moduleRef.get(FakeIamAuthzClient);
 iam.failWith('unavailable', 1); // the next call fails as IAM would
 expect(iam.calls[0].resource).toMatchObject({ type: 'invoices', id: 'inv-1' });
+// A rule can match an attribute by dotted path: deny('invoices:approve', { 'attributes.status': 'void' })
 ```
 
 The real guard and decorators run; only IAM is replaced. The first matching rule decides,

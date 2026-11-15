@@ -1,6 +1,7 @@
 import snapshot from '../contract/authorize.openapi.json';
 import {
   AUTHORIZE_REQUEST_KEYS,
+  AUTHORIZE_RESOURCE_KEYS,
   AUTHORIZE_REQUEST_REQUIRED,
   AUTHORIZE_RESPONSE_KEYS,
 } from '../src/client/contract';
@@ -43,6 +44,13 @@ describe('contract with nestjs-iam-service', () => {
     expect(Object.keys(request.properties ?? {}).sort()).toEqual([...AUTHORIZE_REQUEST_KEYS].sort());
   });
 
+  it('sends a resource with exactly the keys the service takes, type alone required (its ADR-0068)', () => {
+    const resource = schemas['AuthorizeResourceDto'];
+
+    expect(Object.keys(resource?.properties ?? {}).sort()).toEqual([...AUTHORIZE_RESOURCE_KEYS].sort());
+    expect(resource?.required).toEqual(['type']);
+  });
+
   it('treats as required exactly what the service requires', () => {
     expect([...(request.required ?? [])].sort()).toEqual([...AUTHORIZE_REQUEST_REQUIRED].sort());
   });
@@ -51,9 +59,10 @@ describe('contract with nestjs-iam-service', () => {
     expect(request.properties).toMatchObject({
       token: { type: 'string' },
       action: { type: 'string' },
-      resource: { type: 'object' },
       environment: { type: 'object' },
     });
+    // The resource is its own schema (ADR-0068), whose keys the test above checks
+    expect(JSON.stringify(request.properties?.['resource'])).toContain('#/components/schemas/AuthorizeResourceDto');
   });
 
   it('reads exactly the response fields the service declares, all required', () => {
