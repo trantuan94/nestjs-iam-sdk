@@ -10,7 +10,10 @@ export interface FakeRule {
   effect: 'allow' | 'deny';
   /** A full code, or `*` for any action. */
   action: string;
-  /** The rule applies only when every listed attribute equals the resource's. */
+  /**
+   * The rule applies only when every listed key equals the resource's. A dotted key reaches into it:
+   * `{ 'attributes.organizationId': 'O1' }`.
+   */
   match?: Record<string, unknown>;
 }
 
@@ -27,6 +30,15 @@ export const deny = (action: string, match?: Record<string, unknown>): FakeRule 
   action,
   match,
 });
+
+/** The value at a dotted path of the resource: `attributes.organizationId`. */
+const valueAt = (resource: unknown, path: string): unknown =>
+  path
+    .split('.')
+    .reduce<unknown>(
+      (value, key) => (value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined),
+      resource,
+    );
 
 export type FakeFailure = 'unauthenticated' | 'misconfigured' | 'unavailable';
 
@@ -71,7 +83,7 @@ export class FakeIamAuthzClient implements AuthorizationClient {
     const rule = this.rules.find(
       (r) =>
         (r.action === '*' || r.action === request.action) &&
-        Object.entries(r.match ?? {}).every(([key, value]) => request.resource[key] === value),
+        Object.entries(r.match ?? {}).every(([key, value]) => valueAt(request.resource, key) === value),
     );
     return {
       allowed: rule?.effect === 'allow',

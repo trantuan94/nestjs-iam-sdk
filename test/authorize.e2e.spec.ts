@@ -105,7 +105,7 @@ describe.each(ADAPTERS)('on %s', (_name, adapter) => {
     it('reads a resource attribute from the body', async () => {
       await call('/invoices', { method: 'POST', body: JSON.stringify({ amount: 42 }) });
 
-      expect(iam.calls[0]!.body.resource).toEqual({ type: 'invoices', amount: 42 });
+      expect(iam.calls[0]!.body.resource).toEqual({ type: 'invoices', attributes: { amount: 42 } });
     });
 
     it('answers 403 when IAM says no', async () => {
@@ -224,7 +224,13 @@ describe.each(ADAPTERS)('on %s', (_name, adapter) => {
       await expect(res.json()).resolves.toEqual({ approved: 'inv-1', by: 'user-1' });
       expect(iam.calls[0]!.body).toMatchObject({
         action: 'invoices:approve',
-        resource: { type: 'invoices', id: 'inv-1', namespaceId: 'ns-acme', ownerId: 'user-2', amount: 1500 },
+        resource: {
+          type: 'invoices',
+          id: 'inv-1',
+          namespaceId: 'ns-acme',
+          ownerId: 'user-2',
+          attributes: { amount: 1500 },
+        },
       });
     });
 

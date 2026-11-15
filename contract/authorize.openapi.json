@@ -1,7 +1,7 @@
 {
   "x-source": {
     "document": "nestjs-iam-service/swagger.json",
-    "ref": "00bf159c2670260fc80e1466736903ceedb15f1c"
+    "ref": "aa916c4c877d605ec31cce0bc3c09e7195760f7e"
   },
   "info": {
     "title": "IAM Service",
@@ -697,13 +697,22 @@
             "description": "User's JWT access token forwarded from the external service"
           },
           "resource": {
-            "type": "object",
-            "description": "Resource attributes — must include \"type\" (registered resource type code). Additional attributes (id, namespaceId, ...) are used by ABAC conditions.",
+            "description": "The resource: `type` (a registered resource type code, required), and optionally `id`, `namespaceId` (a claim, checked), `ownerId`, and `attributes` — the object's own data, read by ABAC conditions as `resource.attributes.*`. Any other key, `projectId` included (the platform sets it from the type), is a 400.",
             "example": {
               "type": "products",
               "id": "prod-123",
-              "namespaceId": "ns-1"
-            }
+              "attributes": {
+                "category": "digital",
+                "ownerIds": [
+                  "user-5"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthorizeResourceDto"
+              }
+            ]
           },
           "action": {
             "type": "string",
@@ -722,6 +731,45 @@
           "token",
           "resource",
           "action"
+        ]
+      },
+      "AuthorizeResourceDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Resource type (registered resource type code)",
+            "example": "products"
+          },
+          "id": {
+            "type": "string",
+            "description": "The identifier of the object acted on. Policies read it as `resource.id`; an ABAC denial names it. Not checked against anything",
+            "example": "prod-123"
+          },
+          "namespaceId": {
+            "type": "string",
+            "description": "A CLAIM of the namespace the object lives in, checked, never trusted: one other than the token holder's answers `allowed: false`. It can only deny",
+            "example": "ns-1"
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The object's owner (`resource.ownerId`), which the seeded `profiles` policies compare with the subject",
+            "example": "user-5"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The object's own data, read by policies as `resource.attributes.*` — a field named `type` or `namespaceId` here is the object's, never the platform's",
+            "example": {
+              "category": "digital",
+              "ownerIds": [
+                "user-5"
+              ]
+            }
+          }
+        },
+        "required": [
+          "type"
         ]
       },
       "AuthorizeResponseDto": {
