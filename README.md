@@ -287,9 +287,9 @@ needs one permission granted to the key:
 | `listRoles({ page, limit, searchKey })` | `roles:read` | a page of `{ id, code, name }` |
 | `getAccountRoles(userId)` | `roles:read` | `{ id, code, name }[]` or `null` |
 | `getAccountPermissions(userId)` | `permissions:read` | the codes held, sorted, or `null` |
-| `listResourceTypes({ page, limit, searchKey })` | `permissions:read` | a page of `{ id, code, name, description, allowedActions }` |
+| `listResourceTypes({ page, limit, searchKey })` | `permissions:read` | a page of `{ id, code, name, description, allowedActions, serviceId }` |
 | `revokeSessions(userId)` | `sessions:revoke` | `true` once every session and device trust is ended, as an operator's Revoke Sessions; `false` for no such account. Audited by IAM |
-| `syncResourceTypes(types, { prune, dryRun })` | `resource-types:sync` | `{ dryRun, prune, results }`, one result per type: `created`, `updated`, `unchanged`, `undeclared` (IAM has it, the manifest does not), and with `prune` also `deleted` / `delete-refused`. At most 100 types. Audited by IAM |
+| `syncResourceTypes(types, { prune, dryRun, service })` | `resource-types:sync` | `{ dryRun, prune, service, results }`, one result per type: `created`, `updated`, `unchanged`, `undeclared` (IAM has it, the manifest does not), with `prune` also `deleted` / `delete-refused`, and for a key bound to a service `adopted` / `conflict`. At most 100 types. Audited by IAM |
 
 ```ts
 @Injectable()
@@ -322,6 +322,23 @@ actions are narrowed away — their grants stripped from every role — and unde
 unless a role holds one. The sync is not atomic: each type is written on its own, and sending the
 same manifest again finishes one that failed part way. `dryRun: true` answers the same results
 and writes nothing.
+
+**Several services in one project** (nestjs-iam-service's ADR-0070): bind each service's API key
+to its *project service* in IAM, and its sync reaches that service's types only — converged,
+and pruned, without touching another service's. A declared type that belongs to no service (one
+synced before services existed, or typed in by an operator) is **adopted**: it becomes the
+service's, its grants kept. A code another service already holds answers `conflict` and is left
+alone. The answer names the service, and the service may describe itself as it syncs:
+
+```ts
+const { service, results } = await this.iam.syncResourceTypes(IAM_RESOURCE_TYPES, {
+  service: { name: 'Email API', description: 'Templates, providers and sending' },
+});
+```
+
+A key bound to no service syncs the project's types of no service, and may not send `service`
+(`IamMisconfigurationError`). **Upgrade to this version before binding a key**: earlier versions
+refuse the `adopted` and `conflict` outcomes as an unknown answer.
 
 `null` means *no account of this key's project* — unknown, or another project's, alike. Every
 other failure throws, by class:
@@ -380,8 +397,10 @@ The real guard and decorators run; only IAM is replaced. The first matching rule
 
 `IamServiceClient` is replaced by `FakeIamServiceClient`, which answers from what you give it,
 as IAM would — identifiers ignoring case, an unknown id `null`, a blocked account no address.
-`syncResourceTypes` applies a manifest to its resource types as IAM does without `prune`, and
-records each one in `syncedResourceTypes`:
+`syncResourceTypes` applies a manifest to its resource types as IAM does without `prune` —
+scoped to the key's service when `service` (the project service the fake key is bound to) is
+given, adopting and reporting conflicts as IAM does — and records each one in
+`syncedResourceTypes`:
 
 ```ts
 IamAuthzTestingModule.forRoot({

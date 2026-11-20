@@ -69,6 +69,15 @@ export interface ServiceResourceType {
   name: string;
   description: string | null;
   allowedActions: string[];
+  /** The project service that declares the type, or `null` for a type of no service (ADR-0070 in the service). */
+  serviceId: string | null;
+}
+
+/** A project service, as a sync names the one its key is bound to. */
+export interface ServiceRef {
+  id: string;
+  code: string;
+  name: string;
 }
 
 /** A custom attribute of a resource type, for ABAC conditions. */
@@ -95,9 +104,18 @@ export interface ResourceTypeDeclaration {
 
 /**
  * What a sync did to one type. `undeclared`: IAM has it and the manifest does not, with `prune` off.
- * `delete-refused`: `prune` is on but a role holds one of its codes.
+ * `delete-refused`: `prune` is on but a role holds one of its codes. `adopted`: a type of no service, now the
+ * service's the key is bound to. `conflict`: the code is another service's type in the project, left alone.
  */
-export type ResourceTypeSyncOutcome = 'created' | 'updated' | 'unchanged' | 'deleted' | 'delete-refused' | 'undeclared';
+export type ResourceTypeSyncOutcome =
+  | 'created'
+  | 'updated'
+  | 'unchanged'
+  | 'adopted'
+  | 'deleted'
+  | 'delete-refused'
+  | 'undeclared'
+  | 'conflict';
 
 export interface ResourceTypeSyncResult {
   code: string;
@@ -114,6 +132,11 @@ export interface ResourceTypeSync {
   /** True when nothing was written. */
   dryRun: boolean;
   prune: boolean;
+  /**
+   * The project service the key is bound to — whose types the sync converged — or `null`: a key bound to none
+   * syncs the project's types of no service.
+   */
+  service: ServiceRef | null;
   /** The manifest's types in its order, then every type it does not declare, by code. */
   results: ResourceTypeSyncResult[];
 }
@@ -123,6 +146,11 @@ export interface ResourceTypeSyncOptions {
   prune?: boolean;
   /** Answer what the sync would do, writing nothing. Default `false`. */
   dryRun?: boolean;
+  /**
+   * How the service the key is bound to describes itself in IAM; each field absent keeps what is stored, and a
+   * `null` description clears it. A key bound to no service may not send it (IAM answers 400).
+   */
+  service?: { name?: string; description?: string | null };
 }
 
 /** The fields of a declaration, and the ones IAM requires; `test/contract.spec.ts` compares them with the snapshot. */
@@ -132,10 +160,17 @@ export const RESOURCE_TYPE_SYNC_OUTCOMES = [
   'created',
   'updated',
   'unchanged',
+  'adopted',
   'deleted',
   'delete-refused',
   'undeclared',
+  'conflict',
 ] as const satisfies readonly ResourceTypeSyncOutcome[];
+
+/** The fields of `ResourceTypeSyncOptions.service`; `test/contract.spec.ts` compares them with the snapshot. */
+export const SERVICE_SELF_DESCRIPTION_KEYS = ['name', 'description'] as const satisfies readonly (keyof NonNullable<
+  ResourceTypeSyncOptions['service']
+>)[];
 
 /** The most types one sync may declare. */
 export const RESOURCE_TYPE_SYNC_MAX = 100;
@@ -172,11 +207,12 @@ export const SERVICE_RESPONSE_KEYS = {
   AccountContactResponseDto: ['email', 'firstName', 'lastName'],
   TokenIntrospectionResponseDto: ['active', 'sub', 'identifier', 'sessionId', 'mfaCleared', 'exp'],
   ServiceRoleResponseDto: ['id', 'code', 'name'],
-  ServiceResourceTypeResponseDto: ['id', 'code', 'name', 'description', 'allowedActions'],
+  ServiceResourceTypeResponseDto: ['id', 'code', 'name', 'description', 'allowedActions', 'serviceId'],
   AccountPermissionsResponseDto: ['permissions'],
   AccountRolesResponseDto: ['roles'],
   AccountLookupResponseDto: ['accounts'],
-  SyncResourceTypesResponseDto: ['dryRun', 'prune', 'results'],
+  SyncResourceTypesResponseDto: ['dryRun', 'prune', 'service', 'results'],
+  SyncedServiceDto: ['id', 'code', 'name'],
   ResourceTypeSyncResultDto: ['code', 'outcome', 'addedActions', 'removedActions', 'undeclaredActions', 'fieldsChanged'],
 } as const;
 

@@ -66,6 +66,7 @@ export {
   type TokenIntrospection,
   type ServiceRole,
   type ServiceResourceType,
+  type ServiceRef,
   type Page,
   type ListQuery,
 } from './service/contract';

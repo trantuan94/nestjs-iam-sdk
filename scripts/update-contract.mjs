@@ -68,7 +68,9 @@ const SCHEMAS = [
   'ServiceResourceTypeListResponseDto',
   'SyncResourceTypesDto',
   'ResourceTypeDeclarationDto',
+  'ServiceSelfDescriptionDto',
   'SyncResourceTypesResponseDto',
+  'SyncedServiceDto',
   'ResourceTypeSyncResultDto',
   'ResourceTypeSyncOutcome',
 ];

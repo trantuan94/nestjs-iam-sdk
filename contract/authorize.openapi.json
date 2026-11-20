@@ -1,7 +1,7 @@
 {
   "x-source": {
     "document": "nestjs-iam-service/swagger.json",
-    "ref": "aa916c4c877d605ec31cce0bc3c09e7195760f7e"
+    "ref": "90a9dbc55fc29a00137a15a5c0522cf7476b4a82"
   },
   "info": {
     "title": "IAM Service",
@@ -569,7 +569,7 @@
         ]
       },
       "put": {
-        "description": "For a resource service holding an API key granted `resource-types:sync`, typically at deploy or boot: every type it serves, with its actions. Types the project lacks are created, missing actions added, `name` / `description` / `attributes` set to the declaration. Without `prune`, nothing is taken away — what the project has beyond the manifest is reported (`undeclared`, `undeclaredActions`). With `prune`, undeclared actions are narrowed away — their grants stripped from every role — and undeclared types deleted, unless a role holds one (`delete-refused`). The derived permission codes grant nothing until an operator puts them in a role. Not atomic: each type is written on its own, and sending the same manifest again finishes a sync that failed part way. `?dryRun=true` answers the same results and writes nothing. Each change is audited, naming the key.",
+        "description": "For a resource service holding an API key granted `resource-types:sync`, typically at deploy or boot: every type it serves, with its actions. Types the project lacks are created, missing actions added, `name` / `description` / `attributes` set to the declaration. Without `prune`, nothing is taken away — what the project has beyond the manifest is reported (`undeclared`, `undeclaredActions`). With `prune`, undeclared actions are narrowed away — their grants stripped from every role — and undeclared types deleted, unless a role holds one (`delete-refused`). The derived permission codes grant nothing until an operator puts them in a role. Not atomic: each type is written on its own, and sending the same manifest again finishes a sync that failed part way. `?dryRun=true` answers the same results and writes nothing. Each change is audited, naming the key. A key bound to a service (ADR-0070) syncs that service's types only: it adopts a declared type of no service (`adopted`), leaves another service's type alone (`conflict`), and its prune reaches only its own service. A key bound to none syncs the types of no service.",
         "operationId": "serviceSyncResourceTypes",
         "parameters": [
           {
@@ -630,7 +630,7 @@
             "X-API-Key": []
           }
         ],
-        "summary": "Declare the resource types of the key's project",
+        "summary": "Declare the resource types of the key's project — or of its service",
         "tags": [
           "service"
         ]
@@ -1143,6 +1143,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "serviceId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The service of the project that declares the type, or null (ADR-0070)"
           }
         },
         "required": [
@@ -1150,7 +1155,8 @@
           "code",
           "name",
           "description",
-          "allowedActions"
+          "allowedActions",
+          "serviceId"
         ]
       },
       "ServiceResourceTypeListResponseDto": {
@@ -1206,6 +1212,14 @@
             "type": "boolean",
             "default": false,
             "description": "Also take away what the manifest does not declare: actions are narrowed (their grants stripped from every role, their policies retired) and types deleted — a type a role still holds is kept and reported `delete-refused`. Off, the sync only adds."
+          },
+          "service": {
+            "description": "How the service the key is bound to describes itself (ADR-0070); a key bound to none may not send it (400).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ServiceSelfDescriptionDto"
+              }
+            ]
           }
         },
         "required": [
@@ -1290,6 +1304,22 @@
           "allowedActions"
         ]
       },
+      "ServiceSelfDescriptionDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 150,
+            "example": "Email API"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true,
+            "description": "`null` clears it"
+          }
+        }
+      },
       "SyncResourceTypesResponseDto": {
         "type": "object",
         "properties": {
@@ -1299,6 +1329,16 @@
           },
           "prune": {
             "type": "boolean"
+          },
+          "service": {
+            "nullable": true,
+            "description": "The service the key is bound to, or null: a key bound to none syncs the types of no service (ADR-0070)",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SyncedServiceDto"
+              }
+            ]
           },
           "results": {
             "description": "One per type: the manifest's in its order, then every type it does not declare, by code.",
@@ -1311,7 +1351,29 @@
         "required": [
           "dryRun",
           "prune",
+          "service",
           "results"
+        ]
+      },
+      "SyncedServiceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "example": "api-emails"
+          },
+          "name": {
+            "type": "string",
+            "example": "Email API"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name"
         ]
       },
       "ResourceTypeSyncResultDto": {
@@ -1322,7 +1384,7 @@
             "example": "products"
           },
           "outcome": {
-            "description": "`undeclared`: IAM has the type, the manifest does not, and `prune` is off. `delete-refused`: `prune` is on but a role holds one of its codes.",
+            "description": "`undeclared`: IAM has the type, the manifest does not, and `prune` is off. `delete-refused`: `prune` is on but a role holds one of its codes. `adopted`: a type of no service, now the key's service's (ADR-0070). `conflict`: the code is another service's type in this project, left alone.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ResourceTypeSyncOutcome"
@@ -1377,11 +1439,13 @@
           "created",
           "updated",
           "unchanged",
+          "adopted",
           "deleted",
           "delete-refused",
-          "undeclared"
+          "undeclared",
+          "conflict"
         ],
-        "description": "`undeclared`: IAM has the type, the manifest does not, and `prune` is off. `delete-refused`: `prune` is on but a role holds one of its codes."
+        "description": "`undeclared`: IAM has the type, the manifest does not, and `prune` is off. `delete-refused`: `prune` is on but a role holds one of its codes. `adopted`: a type of no service, now the key's service's (ADR-0070). `conflict`: the code is another service's type in this project, left alone."
       }
     }
   }

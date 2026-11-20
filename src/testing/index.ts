@@ -3,6 +3,7 @@ export { IamAuthzTestingModule, type IamAuthzTestingOptions } from './iam-authz-
 export {
   FakeIamServiceClient,
   type FakeServiceData,
+  type FakeResourceType,
   type FakeServiceAccount,
   type FakeServiceFailure,
 } from './fake-iam-service.client';
