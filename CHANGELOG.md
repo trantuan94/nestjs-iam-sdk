@@ -1,5 +1,27 @@
 # @trantuan94/nestjs-iam-sdk
 
+## 0.7.0
+
+### Minor Changes
+
+- fc03a40: Project services (nestjs-iam-service ADR-0070). A key bound to a project service syncs that service's resource types
+  only, and the SDK now reads what such a sync answers:
+  
+  - `syncResourceTypes` takes `service: { name?, description? }` to describe the bound service, and answers `service`
+    (`{ id, code, name }`, or `null` for a key bound to none).
+  - Two new outcomes: `adopted` (a type of no service, now the service's) and `conflict` (another service's type, left
+    alone). **Upgrade before binding a key to a service**: earlier versions refuse them as an unknown answer.
+  - `listResourceTypes` answers each type's `serviceId`.
+  - `FakeIamServiceClient` takes `service` (the project service the fake key is bound to) and scopes its sync as IAM
+    does; its `resourceTypes` seed takes an optional `serviceId` (`FakeResourceType`).
+
+### Patch Changes
+
+- 6180115: No runtime dependencies. `changeset` and `version` had been listed as dependencies since 0.3.0 — npm packages unrelated
+  to the SDK, which nothing in it imports (the release tooling is `@changesets/cli`, a dev dependency). `version` brought
+  `request` 2.12.0 and with it critical and high advisories (`form-data` GHSA-fjxv-7rqg-78g4 and GHSA-hmw2-7cc7-3qxx,
+  `mime` GHSA-wrvr-8mpx-r7pp, `request` GHSA-p8p7-x288-28g6) into every service that installs the SDK.
+
 ## 0.6.0
 
 ### Minor Changes
