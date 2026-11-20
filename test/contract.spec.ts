@@ -11,6 +11,7 @@ import {
   RESOURCE_TYPE_DECLARATION_REQUIRED,
   RESOURCE_TYPE_SYNC_MAX,
   RESOURCE_TYPE_SYNC_OUTCOMES,
+  SERVICE_SELF_DESCRIPTION_KEYS,
   SERVICE_RESPONSE_KEYS,
   SERVICE_ROUTES,
 } from '../src/service/contract';
@@ -145,9 +146,19 @@ describe('contract with nestjs-iam-service: resource type sync', () => {
     expect([...(declaration?.required ?? [])].sort()).toEqual([...RESOURCE_TYPE_DECLARATION_REQUIRED].sort());
   });
 
-  it('sends a manifest and prune, the manifest required', () => {
-    expect(Object.keys(schemas['SyncResourceTypesDto']?.properties ?? {}).sort()).toEqual(['prune', 'resourceTypes']);
+  it('sends a manifest, prune and the service self-description, the manifest required', () => {
+    expect(Object.keys(schemas['SyncResourceTypesDto']?.properties ?? {}).sort()).toEqual([
+      'prune',
+      'resourceTypes',
+      'service',
+    ]);
     expect(schemas['SyncResourceTypesDto']?.required).toEqual(['resourceTypes']);
+  });
+
+  it('describes the bound service with exactly the fields the option takes', () => {
+    expect(Object.keys(schemas['ServiceSelfDescriptionDto']?.properties ?? {}).sort()).toEqual(
+      [...SERVICE_SELF_DESCRIPTION_KEYS].sort(),
+    );
   });
 
   it('caps a manifest at the size the client refuses beyond', () => {

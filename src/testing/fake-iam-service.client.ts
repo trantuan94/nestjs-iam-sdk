@@ -9,6 +9,7 @@ import type {
   Page,
   ServiceAccount,
   ServicePermission,
+  ServiceRef,
   ServiceResourceType,
   ServiceRole,
   TokenIntrospection,
@@ -30,10 +31,18 @@ export interface FakeServiceAccount extends Partial<Omit<ServiceAccount, 'id' | 
   permissions?: string[];
 }
 
+/** A resource type of the fake project; `serviceId` absent is a type of no service. */
+export type FakeResourceType = Omit<ServiceResourceType, 'serviceId'> & { serviceId?: string | null };
+
 export interface FakeServiceData {
   accounts?: FakeServiceAccount[];
   roles?: ServiceRole[];
-  resourceTypes?: ServiceResourceType[];
+  resourceTypes?: FakeResourceType[];
+  /**
+   * The project service the fake key is bound to, or `null` (the default): a key bound to none. A bound key's sync
+   * converges only its service's types and adopts those of no service.
+   */
+  service?: ServiceRef | null;
   /** Token → its introspection. A token not listed is `{ active: false }`. */
   tokens?: Record<string, TokenIntrospection>;
   /**
@@ -44,6 +53,8 @@ export interface FakeServiceData {
 }
 
 export type FakeServiceFailure = 'misconfigured' | 'unavailable';
+
+type FakeState = Required<Omit<FakeServiceData, 'resourceTypes'>> & { resourceTypes: ServiceResourceType[] };
 
 const ALL: ServicePermission[] = [
   'tokens:introspect',
@@ -67,7 +78,7 @@ export class FakeIamServiceClient implements ServiceReadsClient {
   readonly revokedSessions: string[] = [];
   /** Every manifest `syncResourceTypes` received, in order (a dry run is not one). */
   readonly syncedResourceTypes: ResourceTypeDeclaration[][] = [];
-  private data: Required<FakeServiceData>;
+  private data: FakeState;
   private failure: { kind: FakeServiceFailure; remaining: number } | undefined;
 
   constructor(data: FakeServiceData = {}) {
@@ -165,19 +176,44 @@ export class FakeIamServiceClient implements ServiceReadsClient {
    * Applies the manifest to the fake's resource types as IAM does without `prune` — creates, adds actions, sets the
    * name and description — and answers what changed; a type it does not declare is `undeclared`. `prune` is only
    * echoed: the fake removes nothing. A dry run answers the same and changes nothing.
+   *
+   * Scoped to the key's service as IAM is: only the bound service's types (or, bound to none, the types of no
+   * service) are converged and reported undeclared; a declared type of no service is `adopted` by a bound key; a
+   * code another service holds is a `conflict`, left alone. Sending `service` with a key bound to none fails as
+   * IAM's 400 does.
    */
   async syncResourceTypes(
     resourceTypes: readonly ResourceTypeDeclaration[],
     options: ResourceTypeSyncOptions = {},
   ): Promise<ResourceTypeSync> {
     this.enter('syncResourceTypes', 'resource-types:sync', [resourceTypes, options]);
+    const bound = this.data.service;
+    if (options.service && !bound) {
+      throw new IamMisconfigurationError(
+        'IAM answered 400: `service` describes the service a key is bound to; this key is bound to none',
+        400,
+      );
+    }
     if (!options.dryRun) this.syncedResourceTypes.push(resourceTypes.map((t) => ({ ...t })));
 
+    const serviceId = bound?.id ?? null;
+    const owned = (t: ServiceResourceType) => t.serviceId === serviceId;
     const declared = new Set(resourceTypes.map((t) => t.code));
     const types = [...this.data.resourceTypes];
     const results = resourceTypes.map((declaration): ResourceTypeSyncResult => {
       const index = types.findIndex((t) => t.code === declaration.code);
       const current = types[index];
+      const adopting = !!current && current.serviceId === null && serviceId !== null;
+      if (current && !owned(current) && !adopting) {
+        return {
+          code: declaration.code,
+          outcome: 'conflict',
+          addedActions: [],
+          removedActions: [],
+          undeclaredActions: [],
+          fieldsChanged: [],
+        };
+      }
       const allowedActions = [...new Set([...(current?.allowedActions ?? []), ...declaration.allowedActions])];
       const description =
         declaration.description === undefined ? (current?.description ?? null) : declaration.description;
@@ -191,12 +227,19 @@ export class FakeIamServiceClient implements ServiceReadsClient {
         name: declaration.name,
         description,
         allowedActions,
+        serviceId,
       };
       if (current) types[index] = next;
       else types.push(next);
       return {
         code: declaration.code,
-        outcome: !current ? 'created' : addedActions.length || fieldsChanged.length ? 'updated' : 'unchanged',
+        outcome: !current
+          ? 'created'
+          : adopting
+            ? 'adopted'
+            : addedActions.length || fieldsChanged.length
+              ? 'updated'
+              : 'unchanged',
         addedActions,
         removedActions: [],
         undeclaredActions: (current?.allowedActions ?? []).filter((a) => !declaration.allowedActions.includes(a)),
@@ -204,7 +247,7 @@ export class FakeIamServiceClient implements ServiceReadsClient {
       };
     });
     const undeclared = this.data.resourceTypes
-      .filter((t) => !declared.has(t.code))
+      .filter((t) => owned(t) && !declared.has(t.code))
       .sort((a, b) => a.code.localeCompare(b.code))
       .map(
         (t): ResourceTypeSyncResult => ({
@@ -217,8 +260,20 @@ export class FakeIamServiceClient implements ServiceReadsClient {
         }),
       );
 
-    if (!options.dryRun) this.data = { ...this.data, resourceTypes: types };
-    return { dryRun: !!options.dryRun, prune: !!options.prune, results: [...results, ...undeclared] };
+    let service = bound && { ...bound };
+    if (!options.dryRun) {
+      this.data = { ...this.data, resourceTypes: types };
+      if (service && options.service?.name !== undefined) {
+        service = { ...service, name: options.service.name };
+        this.data = { ...this.data, service };
+      }
+    }
+    return {
+      dryRun: !!options.dryRun,
+      prune: !!options.prune,
+      service,
+      results: [...results, ...undeclared],
+    };
   }
 
   // ── internals ─────────────────────────────────────────────────────────────
@@ -283,13 +338,14 @@ export class FakeIamServiceClient implements ServiceReadsClient {
     };
   }
 
-  private normalise(data: FakeServiceData): Required<FakeServiceData> {
+  private normalise(data: FakeServiceData): FakeState {
     return {
       accounts: data.accounts ?? [],
       roles: data.roles ?? [],
-      resourceTypes: data.resourceTypes ?? [],
+      resourceTypes: (data.resourceTypes ?? []).map((t) => ({ ...t, serviceId: t.serviceId ?? null })),
       tokens: data.tokens ?? {},
       permissions: data.permissions ?? ALL,
+      service: data.service ?? null,
     };
   }
 }

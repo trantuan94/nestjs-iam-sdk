@@ -142,7 +142,14 @@ describe('IamServiceClient', () => {
       answer(200, { ...PAGE, data: [ROLE] });
       await expect(client.listRoles()).resolves.toEqual({ ...PAGE, data: [ROLE] });
 
-      const type = { id: 't1', code: 'products', name: 'Products', description: null, allowedActions: ['read'] };
+      const type = {
+        id: 't1',
+        code: 'products',
+        name: 'Products',
+        description: null,
+        allowedActions: ['read'],
+        serviceId: null,
+      };
       answer(200, { ...PAGE, data: [type] });
       await expect(client.listResourceTypes()).resolves.toEqual({ ...PAGE, data: [type] });
     });
@@ -165,7 +172,14 @@ describe('IamServiceClient', () => {
   // would let a body through that the caller then trusts.
   describe('shape checks, field by field', () => {
     const ACTIVE = { active: true, sub: 'u1', identifier: 'ada', sessionId: 's1', mfaCleared: true, exp: 1 };
-    const TYPE = { id: 't1', code: 'products', name: 'Products', description: 'd', allowedActions: ['read'] };
+    const TYPE = {
+      id: 't1',
+      code: 'products',
+      name: 'Products',
+      description: 'd',
+      allowedActions: ['read'],
+      serviceId: 's-1',
+    };
     const CONTACT = { email: 'a@x.io', firstName: 'A', lastName: 'L' };
     const cases: [string, () => Promise<unknown>, (body: unknown) => unknown, Record<string, unknown>][] = [
       ['getAccount', () => client.getAccount('u1'), (b) => b, ACCOUNT],
@@ -225,8 +239,10 @@ describe('IamServiceClient', () => {
       answer(200, { email: null, firstName: null, lastName: null });
       await expect(client.getContact('a')).resolves.toEqual({ email: null, firstName: null, lastName: null });
 
-      answer(200, { ...PAGE, data: [{ ...TYPE, description: null }] });
-      await expect(client.listResourceTypes()).resolves.toMatchObject({ data: [{ description: null }] });
+      answer(200, { ...PAGE, data: [{ ...TYPE, description: null, serviceId: null }] });
+      await expect(client.listResourceTypes()).resolves.toMatchObject({
+        data: [{ description: null, serviceId: null }],
+      });
     });
   });
 
@@ -356,12 +372,15 @@ describe('IamServiceClient', () => {
       fieldsChanged: [],
     };
 
+    const SERVICE = { id: 's-1', code: 'api-emails', name: 'Email API' };
+
     it('PUTs the manifest, without prune or dryRun unless asked, and answers the results', async () => {
-      answer(200, { dryRun: false, prune: false, results: [RESULT] });
+      answer(200, { dryRun: false, prune: false, service: null, results: [RESULT] });
 
       await expect(client.syncResourceTypes([PRODUCTS])).resolves.toEqual({
         dryRun: false,
         prune: false,
+        service: null,
         results: [RESULT],
       });
       expect(iam.calls[0]).toMatchObject({
@@ -373,13 +392,27 @@ describe('IamServiceClient', () => {
     });
 
     it('sends prune in the body and dryRun in the query', async () => {
-      answer(200, { dryRun: true, prune: true, results: [] });
+      answer(200, { dryRun: true, prune: true, service: null, results: [] });
 
       await client.syncResourceTypes([], { prune: true, dryRun: true });
 
       expect(iam.calls[0]).toMatchObject({
         path: '/api/iam/service/resource-types?dryRun=true',
         body: { resourceTypes: [], prune: true },
+      });
+      expect(iam.calls[0]!.body).not.toHaveProperty('service');
+    });
+
+    it("sends the bound service's self-description, and answers the service and its new outcomes", async () => {
+      const adopted = { ...RESULT, outcome: 'adopted', addedActions: [] };
+      const conflict = { ...RESULT, code: 'orders', outcome: 'conflict', addedActions: [] };
+      answer(200, { dryRun: false, prune: false, service: SERVICE, results: [adopted, conflict] });
+
+      await expect(
+        client.syncResourceTypes([PRODUCTS], { service: { name: 'Email API', description: null } }),
+      ).resolves.toEqual({ dryRun: false, prune: false, service: SERVICE, results: [adopted, conflict] });
+      expect(iam.calls[0]).toMatchObject({
+        body: { resourceTypes: [PRODUCTS], service: { name: 'Email API', description: null } },
       });
     });
 
@@ -393,9 +426,17 @@ describe('IamServiceClient', () => {
     });
 
     it.each<[string, unknown]>([
-      ['no results', { dryRun: false, prune: false }],
-      ['an outcome it does not know', { dryRun: false, prune: false, results: [{ ...RESULT, outcome: 'merged' }] }],
-      ['a field it does not know', { dryRun: false, prune: false, results: [{ ...RESULT, fieldsChanged: ['code'] }] }],
+      ['no results', { dryRun: false, prune: false, service: null }],
+      [
+        'an outcome it does not know',
+        { dryRun: false, prune: false, service: null, results: [{ ...RESULT, outcome: 'merged' }] },
+      ],
+      [
+        'a field it does not know',
+        { dryRun: false, prune: false, service: null, results: [{ ...RESULT, fieldsChanged: ['code'] }] },
+      ],
+      ['no service', { dryRun: false, prune: false, results: [] }],
+      ['a service missing its code', { dryRun: false, prune: false, service: { id: 's', name: 'n' }, results: [] }],
     ])('does not take a 200 with %s for an answer', async (_, body) => {
       answer(200, body);
 

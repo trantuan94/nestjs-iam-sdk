@@ -19,7 +19,8 @@ import {
   type Page,
   type ServiceAccount,
   type ServicePermission,
-  type ServiceResourceType,
+  type ServiceRef,
+  ServiceResourceType,
   type ServiceRole,
   type TokenIntrospection,
 } from './contract';
@@ -115,7 +116,11 @@ const isResourceType: Guard<ServiceResourceType> = (v): v is ServiceResourceType
   typeof v.code === 'string' &&
   typeof v.name === 'string' &&
   isNullableString(v.description) &&
-  isStringArray(v.allowedActions);
+  isStringArray(v.allowedActions) &&
+  isNullableString(v.serviceId);
+
+const isServiceRef: Guard<ServiceRef> = (v): v is ServiceRef =>
+  isObject(v) && typeof v.id === 'string' && typeof v.code === 'string' && typeof v.name === 'string';
 
 const SYNC_OUTCOMES: readonly string[] = RESOURCE_TYPE_SYNC_OUTCOMES;
 const SYNC_FIELDS: readonly string[] = ['name', 'description', 'attributes'] satisfies ResourceTypeSyncResult['fieldsChanged'];
@@ -132,7 +137,11 @@ const isSyncResult: Guard<ResourceTypeSyncResult> = (v): v is ResourceTypeSyncRe
   v.fieldsChanged.every((f) => SYNC_FIELDS.includes(f));
 
 const isSync: Guard<ResourceTypeSync> = (v): v is ResourceTypeSync =>
-  isObject(v) && typeof v.dryRun === 'boolean' && typeof v.prune === 'boolean' && arrayOf(isSyncResult)(v.results);
+  isObject(v) &&
+  typeof v.dryRun === 'boolean' &&
+  typeof v.prune === 'boolean' &&
+  (v.service === null || isServiceRef(v.service)) &&
+  arrayOf(isSyncResult)(v.results);
 
 const pageOf =
   <T>(guard: Guard<T>): Guard<Page<T>> =>
@@ -172,6 +181,7 @@ const toResourceType = (t: ServiceResourceType): ServiceResourceType => ({
   name: t.name,
   description: t.description,
   allowedActions: [...t.allowedActions],
+  serviceId: t.serviceId,
 });
 const toSyncResult = (r: ResourceTypeSyncResult): ResourceTypeSyncResult => ({
   code: r.code,
@@ -184,6 +194,7 @@ const toSyncResult = (r: ResourceTypeSyncResult): ResourceTypeSyncResult => ({
 const toSync = (s: ResourceTypeSync): ResourceTypeSync => ({
   dryRun: s.dryRun,
   prune: s.prune,
+  service: s.service && { id: s.service.id, code: s.service.code, name: s.service.name },
   results: s.results.map(toSyncResult),
 });
 const toPage = <T>(page: Page<T>, map: (item: T) => T): Page<T> => ({
@@ -332,7 +343,11 @@ export class IamServiceClient implements ServiceReadsClient {
         method: 'PUT',
         path: '/service/resource-types',
         query: { dryRun: options.dryRun ? 'true' : undefined },
-        body: { resourceTypes, ...(options.prune ? { prune: true } : {}) },
+        body: {
+          resourceTypes,
+          ...(options.prune ? { prune: true } : {}),
+          ...(options.service ? { service: options.service } : {}),
+        },
       },
       isSync,
     );

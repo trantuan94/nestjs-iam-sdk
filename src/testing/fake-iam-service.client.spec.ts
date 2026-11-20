@@ -1,3 +1,4 @@
+import { IamMisconfigurationError } from '../client/errors';
 import { Test } from '@nestjs/testing';
 import { IamPermissionDeniedError, IamUnavailableError } from '../client/errors';
 import { IamServiceClient } from '../service/iam-service.client';
@@ -113,6 +114,7 @@ describe('FakeIamServiceClient', () => {
       await expect(fake.syncResourceTypes([], { prune: true })).resolves.toEqual({
         dryRun: false,
         prune: true,
+        service: null,
         results: [
           {
             code: 'stale',
@@ -135,6 +137,43 @@ describe('FakeIamServiceClient', () => {
 
       expect(fake.syncedResourceTypes).toEqual([]);
       await expect(fake.listResourceTypes()).resolves.toMatchObject({ total: 0 });
+    });
+
+    describe('a key bound to a service', () => {
+      const SERVICE = { id: 's-1', code: 'api-emails', name: 'Email API' };
+
+      it("adopts a type of no service, leaves another service's alone, and reports only its own as undeclared", async () => {
+        fake.setData({
+          service: SERVICE,
+          resourceTypes: [
+            { id: 'a', code: 'orders', name: 'Orders', description: null, allowedActions: ['read'] },
+            { id: 'b', code: 'invoices', name: 'Invoices', description: null, allowedActions: ['read'], serviceId: 's-2' },
+            { id: 'c', code: 'theirs', name: 'Theirs', description: null, allowedActions: ['read'], serviceId: 's-2' },
+            { id: 'd', code: 'mine', name: 'Mine', description: null, allowedActions: ['read'], serviceId: 's-1' },
+          ],
+        });
+
+        const answer = await fake.syncResourceTypes(
+          [ORDERS, { code: 'invoices', name: 'Invoices', allowedActions: ['read'] }],
+          { service: { name: 'Emails' } },
+        );
+
+        expect(answer.service).toEqual({ ...SERVICE, name: 'Emails' });
+        expect(answer.results.map((r) => [r.code, r.outcome])).toEqual([
+          ['orders', 'adopted'],
+          ['invoices', 'conflict'],
+          ['mine', 'undeclared'],
+        ]);
+        await expect(fake.listResourceTypes({ searchKey: 'orders' })).resolves.toMatchObject({
+          data: [{ code: 'orders', serviceId: 's-1' }],
+        });
+      });
+
+      it('refuses a self-description from a key bound to none, as IAM does', async () => {
+        await expect(fake.syncResourceTypes([], { service: { name: 'X' } })).rejects.toBeInstanceOf(
+          IamMisconfigurationError,
+        );
+      });
     });
 
     it('needs resource-types:sync', async () => {
