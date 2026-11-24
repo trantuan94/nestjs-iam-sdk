@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
-import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
+import { DiscoveryService, MetadataScanner } from '@nestjs/core';
 import { IAM_AUTHZ_OPTIONS, type ResolvedIamAuthzOptions } from '../options';
-import { AUTHORIZE_METADATA, SKIP_AUTHORIZE_METADATA } from './metadata';
+import { endpointPolicyOf } from './metadata';
 
 export interface AuditedRoute {
   controller: string;
@@ -23,7 +23,6 @@ export class RouteAudit implements OnApplicationBootstrap {
   constructor(
     private readonly discovery: DiscoveryService,
     private readonly scanner: MetadataScanner,
-    private readonly reflector: Reflector,
     @Inject(IAM_AUTHZ_OPTIONS) private readonly options: ResolvedIamAuthzOptions,
   ) {}
 
@@ -51,16 +50,12 @@ export class RouteAudit implements OnApplicationBootstrap {
         const handler = (prototype as Record<string, unknown>)[name] as object;
         if (Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
         if (Reflect.getMetadata(PATH_METADATA, handler) === undefined) continue;
-        const requirements = this.reflector.get<unknown[] | undefined>(AUTHORIZE_METADATA, handler as never);
-        const reason = this.reflector.getAllAndOverride<string | undefined>(SKIP_AUTHORIZE_METADATA, [
-          handler as never,
-          controller as never,
-        ]);
+        const policy = endpointPolicyOf(handler, controller);
         found.push({
           controller: wrapper.name,
           handler: name,
-          status: requirements?.length ? 'authorized' : reason !== undefined ? 'skipped' : 'undeclared',
-          ...(reason !== undefined && !requirements?.length ? { reason } : {}),
+          status: policy.kind === 'exempt' ? 'skipped' : policy.kind,
+          ...(policy.kind === 'exempt' ? { reason: policy.reason } : {}),
         });
       }
     }
