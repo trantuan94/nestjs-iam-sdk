@@ -225,8 +225,14 @@ It does not need `IamAuthzModule` to be imported.
 
 To document what a route ENFORCES rather than declare it a second time, read its `@Authorize`
 requirements back with `authorizationRequirementsOf(handler)` — `{ action, resourceType }[]`, the
-type `undefined` when it is resolved from the request. A service rendering its own endpoint
-policy, or a spec checking that every action is one it declares to IAM, needs nothing else.
+type `undefined` when it is resolved from the request. A spec checking that every action is one
+it declares to IAM needs nothing else.
+
+`endpointPolicyOf(handler, controller)` classifies a route the way the global guard does:
+`{ kind: 'authorized', requirements }`, `{ kind: 'exempt', reason }` (the `@SkipAuthorize` reason,
+the handler's else its controller's) or `{ kind: 'undeclared' }` — refused with 403. A service
+rendering its endpoint policy, or a spec failing on an undeclared route, reads that rather than
+the SDK's metadata keys.
 
 ## What the client sees
 

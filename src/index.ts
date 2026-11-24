@@ -8,7 +8,12 @@ export {
 } from './options';
 
 export { Authorize } from './guard/authorize.decorator';
-export { authorizationRequirementsOf, type AuthorizationRequirement } from './guard/metadata';
+export {
+  authorizationRequirementsOf,
+  endpointPolicyOf,
+  type AuthorizationRequirement,
+  type EndpointPolicy,
+} from './guard/metadata';
 export { SkipAuthorize } from './guard/skip-authorize.decorator';
 export {
   AccessControl,
